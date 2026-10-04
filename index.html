@@ -590,12 +590,12 @@
     function startTimerCustom(startSec) {
         if (timerInterval) clearInterval(timerInterval);
         secondsElapsed = startSec;
-        const timerDisplay = document.getElementById('timer-display');
-        if (timerDisplay) timerDisplay.innerText = `${secondsElapsed}s`;
+        const td = document.getElementById('timer-display');
+        if (td) td.innerText = `${secondsElapsed}s`;
         timerInterval = setInterval(() => {
             secondsElapsed++;
-            const td = document.getElementById('timer-display');
-            if (td) td.innerText = `${secondsElapsed}s`;
+            const td2 = document.getElementById('timer-display');
+            if (td2) td2.innerText = `${secondsElapsed}s`;
         }, 1000);
     }
 
@@ -777,10 +777,19 @@
 
         attemptCount = 1;
         setupActiveCell();
-        document.getElementById('message').innerText = '';
-        document.getElementById('win-container').style.display = 'none';
-        document.getElementById('game-workspace').style.display = 'block';
-        document.getElementById('attempt-counter').innerText = `Attempt #1`;
+        
+        const msg = document.getElementById('message');
+        if (msg) msg.innerText = '';
+        
+        const winCont = document.getElementById('win-container');
+        if (winCont) winCont.style.display = 'none';
+        
+        const ws = document.getElementById('game-workspace');
+        if (ws) ws.style.display = 'block';
+        
+        const ac = document.getElementById('attempt-counter');
+        if (ac) ac.innerText = `Attempt #1`;
+
         startTimer();
         updateRankDisplay(getGlobalStats().won);
         render();
@@ -835,8 +844,11 @@
     function evaluateBoard() {
         if (boardState.some(val => val === null)) {
             soundFail();
-            document.getElementById('message').style.color = '#f87171';
-            document.getElementById('message').innerText = 'All tumblers must have numbers before testing!';
+            const msg = document.getElementById('message');
+            if (msg) {
+                msg.style.color = '#f87171';
+                msg.innerText = 'All tumblers must have numbers before testing!';
+            }
             return;
         }
 
@@ -894,9 +906,13 @@
         setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
 
         attemptCount++;
-        document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
-        document.getElementById('message').style.color = 'var(--accent-gold)';
-        document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
+        const ac = document.getElementById('attempt-counter');
+        if (ac) ac.innerText = `Attempt #${attemptCount}`;
+        const msg = document.getElementById('message');
+        if (msg) {
+            msg.style.color = 'var(--accent-gold)';
+            msg.innerText = 'Combination tested! Correct tumblers locked in.';
+        }
         setupActiveCell();
         render();
     }
@@ -992,6 +1008,16 @@
     }
     function closeArchiveModal() {
         document.getElementById('archive-modal').style.display = 'none';
+    }
+
+    function getRowCol(index) {
+        return { r: Math.floor(index / 3), c: index % 3 };
+    }
+
+    function isAdjacent(idx1, idx2) {
+        let pos1 = getRowCol(idx1);
+        let pos2 = getRowCol(idx2);
+        return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
     }
 
     function render() {
