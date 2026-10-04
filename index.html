@@ -31,7 +31,7 @@
             -webkit-tap-highlight-color: transparent;
         }
         .container {
-            max-width: 500px;
+            max-width: 520px;
             width: 100%;
             background: var(--bg-panel);
             padding: 30px;
@@ -236,7 +236,7 @@
         .catalog-section {
             margin-bottom: 25px;
             background: #090d16;
-            padding: 16px;
+            padding: 16px 12px;
             border-radius: 10px;
             border: 1px solid var(--border-color);
         }
@@ -250,22 +250,23 @@
         }
         .number-pool {
             display: flex;
-            justify-content: center;
-            gap: 10px;
-            flex-wrap: wrap;
+            justify-content: space-between; /* Spreads all 9 buttons cleanly in one row */
+            gap: 6px;
+            flex-wrap: nowrap;
         }
         .pool-btn {
-            width: 48px;
-            height: 48px;
+            width: 42px;
+            height: 46px;
             background: #1e293b;
             border: 2px solid var(--border-color);
-            border-radius: 10px;
-            font-size: 1.25em;
+            border-radius: 8px;
+            font-size: 1.15em;
             font-weight: 900;
             color: var(--text-main);
             cursor: pointer;
             transition: 0.15s ease;
             user-select: none;
+            flex: 1;
         }
         .pool-btn:hover {
             background: var(--accent-gold);
