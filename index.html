@@ -37,6 +37,8 @@
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
             border: 2px solid #475569;
             text-align: center;
+            position: relative;
+            overflow: hidden;
         }
         .vault-header {
             display: flex;
@@ -130,6 +132,7 @@
             grid-template-rows: repeat(3, 1fr);
             gap: 12px;
             margin-bottom: 25px;
+            transition: transform 0.3s ease;
         }
         .cell {
             aspect-ratio: 1;
@@ -141,7 +144,7 @@
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            transition: transform 0.1s ease, border-color 0.15s ease;
+            transition: transform 0.1s ease, border-color 0.15s ease, background-color 0.3s ease;
             position: relative;
             perspective: 1000px;
         }
@@ -181,7 +184,6 @@
             font-weight: 900;
             color: var(--text-main);
         }
-        /* Animations */
         @keyframes flipCard {
             0% { transform: rotateX(0deg); }
             50% { transform: rotateX(90deg); opacity: 0.5; }
@@ -197,6 +199,15 @@
         }
         .shake {
             animation: shakeGrid 0.4s ease;
+        }
+        /* Safe Door Opening Animation Effect */
+        @keyframes vaultOpenPulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); border-color: var(--accent-green); }
+            70% { box-shadow: 0 0 0 25px rgba(16, 185, 129, 0); border-color: #34d399; }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .vault-unlocked-effect {
+            animation: vaultOpenPulse 0.8s ease-out;
         }
         .catalog-section {
             margin-bottom: 25px;
@@ -260,7 +271,6 @@
             font-size: 0.9em;
             min-height: 24px;
         }
-        /* Win & Stats Modal / Banner Overlay */
         .result-graphic {
             padding: 25px 20px;
             border-radius: 10px;
@@ -294,7 +304,6 @@
             margin: 10px auto;
             max-width: 360px;
         }
-        /* Modal Overlay */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -341,7 +350,7 @@
 </head>
 <body>
 
-<div class="container">
+<div class="container" id="main-container">
     <div class="top-nav">
         <button class="icon-btn" onclick="openStatsModal()">📊 Stats</button>
     </div>
@@ -437,6 +446,12 @@
         setTimeout(() => playTone(450, 'square', 0.15, 0.08), 80);
     }
     function soundFail() { playTone(150, 'sawtooth', 0.2, 0.08); }
+    function soundVaultOpen() {
+        playTone(220, 'sine', 0.15, 0.1);
+        setTimeout(() => playTone(330, 'sine', 0.15, 0.1), 120);
+        setTimeout(() => playTone(440, 'sine', 0.15, 0.12), 240);
+        setTimeout(() => playTone(660, 'triangle', 0.4, 0.15), 360);
+    }
 
     function getEastern5AMDayNumber() {
         const now = new Date();
@@ -496,12 +511,12 @@
     }
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_juice_v1');
+        let raw = localStorage.getItem('safe_cracker_juice_v3_winfx');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try { return JSON.parse(raw); } catch(e) { return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null }; }
     }
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_juice_v1', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_juice_v3_winfx', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -763,25 +778,14 @@
             }
         }
 
-        if (newlyLocked && !allCorrect) {
-            soundLock();
-        } else if (!allCorrect) {
-            soundFail();
-            // Trigger grid shake animation on failure
-            const gridEl = document.getElementById('grid');
-            gridEl.classList.add('shake');
-            setTimeout(() => gridEl.classList.remove('shake'), 400);
-        }
-
-        // Trigger card flip animation on grid during test
-        const cells = document.querySelectorAll('.cell');
-        cells.forEach(c => c.classList.add('flip'));
-        setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
-
-        let data = getDailyHistory();
-
         if (allCorrect || lockedCells.every(val => val)) {
-            soundLock();
+            // Trigger satisfying vault opening sound and visual pulse effect
+            soundVaultOpen();
+            const containerEl = document.getElementById('main-container');
+            containerEl.classList.add('vault-unlocked-effect');
+            setTimeout(() => containerEl.classList.remove('vault-unlocked-effect'), 900);
+
+            let data = getDailyHistory();
             if (!data.todayWon) {
                 data.todayWon = true;
                 updateGlobalStats(true);
@@ -790,27 +794,46 @@
             data.locked = lockedCells;
             data.hints = cellHints;
             saveDailyHistory(data);
-            triggerWinDisplay(data.triesToday, true);
-        } else {
-            data.triesToday++;
-            data.board = boardState;
-            data.locked = lockedCells;
-            data.hints = cellHints;
-            saveDailyHistory(data);
-
-            attemptCount = data.triesToday;
-            document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
-
-            document.getElementById('message').style.color = 'var(--accent-gold)';
-            document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
-            for (let i = 0; i < 9; i++) {
-                if (!lockedCells[i]) {
-                    activeCellIndex = i;
-                    break;
-                }
-            }
+            
+            setTimeout(() => {
+                triggerWinDisplay(data.triesToday, true);
+            }, 600);
             render();
+            return;
         }
+
+        if (newlyLocked) {
+            soundLock();
+        } else {
+            soundFail();
+            const gridEl = document.getElementById('grid');
+            gridEl.classList.add('shake');
+            setTimeout(() => gridEl.classList.remove('shake'), 400);
+        }
+
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => c.classList.add('flip'));
+        setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
+
+        let data = getDailyHistory();
+        data.triesToday++;
+        data.board = boardState;
+        data.locked = lockedCells;
+        data.hints = cellHints;
+        saveDailyHistory(data);
+
+        attemptCount = data.triesToday;
+        document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
+
+        document.getElementById('message').style.color = 'var(--accent-gold)';
+        document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
+        for (let i = 0; i < 9; i++) {
+            if (!lockedCells[i]) {
+                activeCellIndex = i;
+                break;
+            }
+        }
+        render();
     }
 
     function generateShareEmojiGrid() {
