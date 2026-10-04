@@ -590,10 +590,12 @@
     function startTimerCustom(startSec) {
         if (timerInterval) clearInterval(timerInterval);
         secondsElapsed = startSec;
-        document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
+        const timerDisplay = document.getElementById('timer-display');
+        if (timerDisplay) timerDisplay.innerText = `${secondsElapsed}s`;
         timerInterval = setInterval(() => {
             secondsElapsed++;
-            document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
+            const td = document.getElementById('timer-display');
+            if (td) td.innerText = `${secondsElapsed}s`;
         }, 1000);
     }
 
@@ -629,8 +631,10 @@
 
     function updateRankDisplay(wonCount) {
         let rank = getSecurityRank(wonCount);
-        document.getElementById('header-rank-title').innerText = rank.short;
-        document.getElementById('modal-rank-title').innerText = rank.title;
+        const hTitle = document.getElementById('header-rank-title');
+        const mTitle = document.getElementById('modal-rank-title');
+        if (hTitle) hTitle.innerText = rank.short;
+        if (mTitle) mTitle.innerText = rank.title;
     }
 
     function getGlobalStats() {
