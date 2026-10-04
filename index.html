@@ -236,7 +236,6 @@
         .shake {
             animation: shakeGrid 0.4s ease;
         }
-        /* Particle Confetti / Gold Burst */
         .confetti {
             position: absolute;
             width: 8px;
@@ -350,7 +349,6 @@
             margin: 10px auto;
             max-width: 360px;
         }
-        /* Modals */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -457,8 +455,8 @@
 
     <div class="instructions">
         <strong>How to crack:</strong> Match tumbler numbers to lock in greens and yellows. Swap numbers manually, then click <strong>Test Combination</strong>.
-        <br>• <span style="color: var(--accent-green); font-weight: bold;">Green</span> = Correct position (locks!).
-        <br>• <span style="color: var(--accent-yellow); font-weight: bold;">Yellow</span> = Adjacent (touching) correct digit.
+        <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Correct position (locks!).
+        <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Adjacent (touching) correct digit.
     </div>
 
     <div class="hud">
@@ -546,7 +544,7 @@
     let attemptCount = 1;
     let secondsElapsed = 0;
     let timerInterval = null;
-    let activeMode = 'daily'; // 'daily', 'easy', 'standard', 'master'
+    let activeMode = 'daily';
     let activePuzzleSeed = null;
 
     // --- SOUND ENGINE ---
@@ -618,7 +616,6 @@
         }, 1000);
     }
 
-    // --- PARTICLE BURST EFFECT ---
     function triggerConfettiBurst(element) {
         const rect = element.getBoundingClientRect();
         const x = rect.left + rect.width / 2;
@@ -638,7 +635,6 @@
         }
     }
 
-    // --- SECURITY RANKS ---
     function getSecurityRank(wonCount) {
         if (wonCount >= 25) return { title: "👑 Legendary Heist Master", short: "👑 Master" };
         if (wonCount >= 10) return { title: "🕵️ Master Safecracker", short: "🕵️ Safecracker" };
@@ -683,7 +679,6 @@
         document.getElementById('stats-modal').style.display = 'none';
     }
 
-    // --- DIFFICULTY MODES ---
     function switchDifficulty(mode) {
         activeMode = mode;
         document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
