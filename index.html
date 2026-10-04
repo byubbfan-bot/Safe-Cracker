@@ -271,7 +271,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> The vault starts pre-filled with guaranteed starting clues (1–2 greens and 2–3 yellows)! Click any tumbler to swap digits, then click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> The vault starts with guaranteed starter clues (at least 1 green and 2 yellows)! Click any tumbler to swap digits manually, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler clicked into correct position (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching) to this tumbler.
     </div>
@@ -336,7 +336,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_guaranteed_hints_data');
+        let raw = localStorage.getItem('safe_cracker_strict_starter_data');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false };
         try {
             return JSON.parse(raw);
@@ -352,7 +352,7 @@
             data.currentDay = today;
             data.triesToday = 1;
             data.todayWon = false;
-            localStorage.setItem('safe_cracker_guaranteed_hints_data', JSON.stringify(data));
+            localStorage.setItem('safe_cracker_strict_starter_data', JSON.stringify(data));
         }
         attemptCount = data.triesToday;
         return data;
@@ -377,7 +377,7 @@
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // Guaranteed at least 1 green (let's use indices[0]) and 2 yellows (indices[1], indices[2])
+        // Guaranteed at least 1 green (indices[0]) and 2 yellows (indices[1], indices[2])
         let green1 = indices[0];
         let yellow1 = indices[1];
         let yellow2 = indices[2];
@@ -436,6 +436,7 @@
         lockedCells = Array(9).fill(false);
         cellHints = Array(9).fill(null);
 
+        // Only on attempt #1 and if not won yet do we generate the starter board. Subsequent attempts leave empty/unlocked slots for manual user entry!
         if (attemptCount === 1 && !data.todayWon) {
             boardState = generateGuaranteedStarterBoard(secretCombination, seededRandom);
             
@@ -454,21 +455,11 @@
                 }
             }
         } else {
-            let usedNums = [];
-            for (let i = 0; i < 9; i++) {
-                if (lockedCells[i]) usedNums.push(boardState[i]);
-            }
-            let remainingPool = availableNumbers.filter(n => !usedNums.includes(n));
-            
-            for (let i = remainingPool.length - 1; i > 0; i--) {
-                let j = Math.floor(seededRandom() * (i + 1));
-                [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
-            }
-
-            let poolIdx = 0;
+            // For later attempts, start with a completely empty board (or keeping previously locked green cells)
             for (let i = 0; i < 9; i++) {
                 if (!lockedCells[i]) {
-                    boardState[i] = remainingPool[poolIdx++];
+                    boardState[i] = null;
+                    cellHints[i] = null;
                 }
             }
         }
@@ -491,14 +482,13 @@
     }
 
     function resetVault() {
-        let dayNum = getEastern5AMDayNumber();
-        let seed = (dayNum * 9301 + 49297) % 233280;
-        function seededRandom() {
-            seed = (seed * 9301 + 49297) % 233280;
-            return seed / 233280;
-        }
-        
         if (attemptCount === 1) {
+            let dayNum = getEastern5AMDayNumber();
+            let seed = (dayNum * 9301 + 49297) % 233280;
+            function seededRandom() {
+                seed = (seed * 9301 + 49297) % 233280;
+                return seed / 233280;
+            }
             boardState = generateGuaranteedStarterBoard(secretCombination, seededRandom);
             lockedCells = Array(9).fill(false);
             cellHints = Array(9).fill(null);
@@ -517,19 +507,9 @@
                 }
             }
         } else {
-            let usedNums = [];
-            for (let i = 0; i < 9; i++) {
-                if (lockedCells[i]) usedNums.push(boardState[i]);
-            }
-            let remainingPool = availableNumbers.filter(n => !usedNums.includes(n));
-            for (let i = remainingPool.length - 1; i > 0; i--) {
-                let j = Math.floor(seededRandom() * (i + 1));
-                [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
-            }
-            let poolIdx = 0;
             for (let i = 0; i < 9; i++) {
                 if (!lockedCells[i]) {
-                    boardState[i] = remainingPool[poolIdx++];
+                    boardState[i] = null;
                     cellHints[i] = null;
                 }
             }
@@ -621,35 +601,14 @@
         if (allCorrect || lockedCells.every(val => val)) {
             if (!data.todayWon) {
                 data.todayWon = true;
-                localStorage.setItem('safe_cracker_guaranteed_hints_data', JSON.stringify(data));
+                localStorage.setItem('safe_cracker_strict_starter_data', JSON.stringify(data));
             }
             triggerWinDisplay(data.triesToday);
         } else {
             data.triesToday++;
-            localStorage.setItem('safe_cracker_guaranteed_hints_data', JSON.stringify(data));
+            localStorage.setItem('safe_cracker_strict_starter_data', JSON.stringify(data));
             attemptCount = data.triesToday;
             document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
-
-            let usedNums = [];
-            for (let i = 0; i < 9; i++) {
-                if (lockedCells[i]) usedNums.push(boardState[i]);
-            }
-            let remainingPool = availableNumbers.filter(n => !usedNums.includes(n));
-            
-            let dayNum = getEastern5AMDayNumber();
-            let seed = (dayNum * 9301 + data.triesToday * 49297) % 233280;
-            for (let i = remainingPool.length - 1; i > 0; i--) {
-                let j = Math.floor((seed / 233280) * (i + 1));
-                seed = (seed * 9301 + 49297) % 233280;
-                [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
-            }
-
-            let poolIdx = 0;
-            for (let i = 0; i < 9; i++) {
-                if (!lockedCells[i]) {
-                    boardState[i] = remainingPool[poolIdx++];
-                }
-            }
 
             document.getElementById('message').style.color = 'var(--accent-gold)';
             document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
