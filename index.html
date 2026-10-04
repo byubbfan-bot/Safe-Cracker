@@ -271,7 +271,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> The vault starts with a pre-filled combination with up to 2 greens and 3 yellows! Click any tumbler to swap digits, then click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> The vault starts pre-filled with guaranteed starting clues (1–2 greens and 2–3 yellows)! Click any tumbler to swap digits, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler clicked into correct position (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching) to this tumbler.
     </div>
@@ -336,7 +336,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_capped_hints_data');
+        let raw = localStorage.getItem('safe_cracker_guaranteed_hints_data');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false };
         try {
             return JSON.parse(raw);
@@ -352,7 +352,7 @@
             data.currentDay = today;
             data.triesToday = 1;
             data.todayWon = false;
-            localStorage.setItem('safe_cracker_capped_hints_data', JSON.stringify(data));
+            localStorage.setItem('safe_cracker_guaranteed_hints_data', JSON.stringify(data));
         }
         attemptCount = data.triesToday;
         return data;
@@ -368,37 +368,29 @@
         return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
     }
 
-    function generateCappedStarterBoard(secret, seededRand) {
+    function generateGuaranteedStarterBoard(secret, seededRand) {
         let board = [...secret];
         let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
         
-        // Shuffle indices
         for (let i = indices.length - 1; i > 0; i--) {
             let j = Math.floor(seededRand() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // We want exactly 2 greens and 3 yellows to start, meaning 4 incorrect/wrong spots.
+        // Guaranteed at least 1 green (let's use indices[0]) and 2 yellows (indices[1], indices[2])
         let green1 = indices[0];
-        let green2 = indices[1];
-        
-        let yellow1 = indices[2];
-        let yellow2 = indices[3];
-        let yellow3 = indices[4];
+        let yellow1 = indices[1];
+        let yellow2 = indices[2];
 
-        // Ensure yellow1, yellow2, yellow3 are placed into positions adjacent to their correct spots, but not correct themselves
         let setYellow = (targetIdx) => {
-            // Find valid adjacent indices
             let neighbors = [];
             for (let i = 0; i < 9; i++) {
                 if (isAdjacent(i, targetIdx) && i !== targetIdx) {
                     neighbors.push(i);
                 }
             }
-            // Pick a neighbor that isn't already claimed
             for (let n of neighbors) {
-                if (board[n] !== secret[n] && n !== green1 && n !== green2) {
-                    // Swap targetIdx value into neighbor n
+                if (board[n] !== secret[n] && n !== green1) {
                     let temp = board[n];
                     board[n] = board[targetIdx];
                     board[targetIdx] = temp;
@@ -409,15 +401,16 @@
 
         setYellow(yellow1);
         setYellow(yellow2);
-        setYellow(yellow3);
 
-        // Scramble the remaining 4 positions so they are definitely neither green nor yellow
-        let remaining = [indices[5], indices[6], indices[7], indices[8]];
+        // Shuffle remaining to ensure no accidental extra greens
+        let remaining = [indices[3], indices[4], indices[5], indices[6], indices[7], indices[8]];
         let tempVal = board[remaining[0]];
         board[remaining[0]] = board[remaining[1]];
         board[remaining[1]] = board[remaining[2]];
         board[remaining[2]] = board[remaining[3]];
-        board[remaining[3]] = tempVal;
+        board[remaining[3]] = board[remaining[4]];
+        board[remaining[4]] = board[remaining[5]];
+        board[remaining[5]] = tempVal;
 
         return board;
     }
@@ -444,7 +437,7 @@
         cellHints = Array(9).fill(null);
 
         if (attemptCount === 1 && !data.todayWon) {
-            boardState = generateCappedStarterBoard(secretCombination, seededRandom);
+            boardState = generateGuaranteedStarterBoard(secretCombination, seededRandom);
             
             for (let i = 0; i < 9; i++) {
                 let userVal = boardState[i];
@@ -506,7 +499,7 @@
         }
         
         if (attemptCount === 1) {
-            boardState = generateCappedStarterBoard(secretCombination, seededRandom);
+            boardState = generateGuaranteedStarterBoard(secretCombination, seededRandom);
             lockedCells = Array(9).fill(false);
             cellHints = Array(9).fill(null);
             for (let i = 0; i < 9; i++) {
@@ -628,12 +621,12 @@
         if (allCorrect || lockedCells.every(val => val)) {
             if (!data.todayWon) {
                 data.todayWon = true;
-                localStorage.setItem('safe_cracker_capped_hints_data', JSON.stringify(data));
+                localStorage.setItem('safe_cracker_guaranteed_hints_data', JSON.stringify(data));
             }
             triggerWinDisplay(data.triesToday);
         } else {
             data.triesToday++;
-            localStorage.setItem('safe_cracker_capped_hints_data', JSON.stringify(data));
+            localStorage.setItem('safe_cracker_guaranteed_hints_data', JSON.stringify(data));
             attemptCount = data.triesToday;
             document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
 
