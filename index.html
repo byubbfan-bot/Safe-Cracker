@@ -39,7 +39,6 @@
             border: 2px solid #475569;
             text-align: center;
             position: relative;
-            overflow: hidden;
         }
         .vault-header {
             display: flex;
@@ -163,6 +162,7 @@
             grid-template-rows: repeat(3, 1fr);
             gap: 12px;
             margin-bottom: 25px;
+            width: 100%;
         }
         .cell {
             aspect-ratio: 1;
@@ -528,7 +528,6 @@
     let timerInterval = null;
     let activePuzzleSeed = null;
 
-    // --- SOUND ENGINE ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playTone(freq, type, duration, vol = 0.05) {
         try {
@@ -625,7 +624,7 @@
     function getSecurityRank(wonCount) {
         if (wonCount >= 25) return { title: "👑 Legendary Heist Master", short: "👑 Master" };
         if (wonCount >= 10) return { title: "🕵️ Master Safecracker", short: "🕵️ Safecracker" };
-        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️ Vault Tech" };
+        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️️ Vault Tech" };
         return { title: "🔓 Apprentice Locksmith", short: "🔓 Apprentice" };
     }
 
@@ -1018,6 +1017,16 @@
         let pos1 = getRowCol(idx1);
         let pos2 = getRowCol(idx2);
         return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
+    }
+
+    function setupActiveCell() {
+        activeCellIndex = 0;
+        for (let i = 0; i < 9; i++) {
+            if (!lockedCells[i]) {
+                activeCellIndex = i;
+                break;
+            }
+        }
     }
 
     function render() {
