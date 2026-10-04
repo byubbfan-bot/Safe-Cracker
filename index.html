@@ -59,6 +59,27 @@
             font-size: 0.9em;
             font-weight: 500;
         }
+        .top-nav {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .icon-btn {
+            background: #090d16;
+            border: 1px solid var(--border-color);
+            color: var(--accent-gold);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8em;
+            transition: 0.15s ease;
+        }
+        .icon-btn:hover {
+            background: var(--accent-gold);
+            color: #0f172a;
+        }
         .daily-tracker {
             display: flex;
             justify-content: space-between;
@@ -120,8 +141,9 @@
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: transform 0.1s ease, border-color 0.15s ease;
             position: relative;
+            perspective: 1000px;
         }
         .cell:hover:not(.locked) {
             border-color: var(--accent-gold);
@@ -158,6 +180,23 @@
             font-size: 2.2em;
             font-weight: 900;
             color: var(--text-main);
+        }
+        /* Animations */
+        @keyframes flipCard {
+            0% { transform: rotateX(0deg); }
+            50% { transform: rotateX(90deg); opacity: 0.5; }
+            100% { transform: rotateX(0deg); opacity: 1; }
+        }
+        .flip {
+            animation: flipCard 0.4s ease;
+        }
+        @keyframes shakeGrid {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .shake {
+            animation: shakeGrid 0.4s ease;
         }
         .catalog-section {
             margin-bottom: 25px;
@@ -221,6 +260,7 @@
             font-size: 0.9em;
             min-height: 24px;
         }
+        /* Win & Stats Modal / Banner Overlay */
         .result-graphic {
             padding: 25px 20px;
             border-radius: 10px;
@@ -254,11 +294,58 @@
             margin: 10px auto;
             max-width: 360px;
         }
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-card {
+            background: var(--bg-panel);
+            border: 2px solid #475569;
+            padding: 25px;
+            border-radius: 14px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            color: var(--text-main);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: #090d16;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: 900;
+            color: var(--accent-gold);
+        }
+        .stat-label {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <div class="top-nav">
+        <button class="icon-btn" onclick="openStatsModal()">📊 Stats</button>
+    </div>
+
     <div class="vault-header">
         <h1>🔐 Safe Cracker</h1>
     </div>
@@ -296,6 +383,28 @@
     <div id="win-container" style="display:none;"></div>
 </div>
 
+<!-- STATS MODAL CONTAINER -->
+<div id="stats-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+        <h2 style="color: var(--accent-gold); margin-top:0; text-transform:uppercase;">Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-value" id="stat-played">0</div>
+                <div class="stat-label">Played</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-win">0%</div>
+                <div class="stat-label">Win %</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-streak">0</div>
+                <div class="stat-label">Streak</div>
+            </div>
+        </div>
+        <button class="btn" onclick="closeStatsModal()" style="margin-top:15px;">Close</button>
+    </div>
+</div>
+
 <script>
     const availableNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
     let secretCombination = [];
@@ -304,6 +413,30 @@
     let lockedCells = Array(9).fill(false);
     let cellHints = Array(9).fill(null);
     let attemptCount = 1;
+
+    // --- SOUND ENGINE (Web Audio API) ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type, duration, vol = 0.05) {
+        try {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        } catch(e) {}
+    }
+    function soundClick() { playTone(600, 'triangle', 0.05, 0.04); }
+    function soundLock() { 
+        playTone(300, 'square', 0.1, 0.06); 
+        setTimeout(() => playTone(450, 'square', 0.15, 0.08), 80);
+    }
+    function soundFail() { playTone(150, 'sawtooth', 0.2, 0.08); }
 
     function getEastern5AMDayNumber() {
         const now = new Date();
@@ -334,18 +467,41 @@
     }
     setInterval(updateDailyCountdown, 1000);
 
-    function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_stable_v5');
-        if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
-        try {
-            return JSON.parse(raw);
-        } catch(e) {
-            return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
+    function getGlobalStats() {
+        let raw = localStorage.getItem('safe_cracker_stats_v1');
+        if (!raw) return { played: 0, won: 0, streak: 0 };
+        try { return JSON.parse(raw); } catch(e) { return { played: 0, won: 0, streak: 0 }; }
+    }
+    function updateGlobalStats(wonGame) {
+        let stats = getGlobalStats();
+        stats.played++;
+        if (wonGame) {
+            stats.won++;
+            stats.streak++;
+        } else {
+            stats.streak = 0;
         }
+        localStorage.setItem('safe_cracker_stats_v1', JSON.stringify(stats));
     }
 
+    function openStatsModal() {
+        let stats = getGlobalStats();
+        document.getElementById('stat-played').innerText = stats.played;
+        document.getElementById('stat-win').innerText = stats.played > 0 ? Math.round((stats.won / stats.played) * 100) + '%' : '0%';
+        document.getElementById('stat-streak').innerText = stats.streak;
+        document.getElementById('stats-modal').style.display = 'flex';
+    }
+    function closeStatsModal() {
+        document.getElementById('stats-modal').style.display = 'none';
+    }
+
+    function getDailyHistory() {
+        let raw = localStorage.getItem('safe_cracker_juice_v1');
+        if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
+        try { return JSON.parse(raw); } catch(e) { return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null }; }
+    }
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_stable_v5', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_juice_v1', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -362,25 +518,21 @@
         let board = [...secret];
         let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
         
-        // Fisher-Yates shuffle indices using the daily seed
         for (let i = indices.length - 1; i > 0; i--) {
             let j = Math.floor(seededRand() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // Pick 1 or 2 greens, and 2 or 3 yellows
-        let numGreens = 1 + Math.floor(seededRand() * 2);   // 1 or 2
-        let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
+        let numGreens = 1 + Math.floor(seededRand() * 2);
+        let numYellows = 2 + Math.floor(seededRand() * 2);
 
         let greenIndices = indices.splice(0, numGreens);
         let yellowIndices = indices.splice(0, numYellows);
 
-        // Keep correct values for green positions
         for (let gIdx of greenIndices) {
             board[gIdx] = secret[gIdx];
         }
 
-        // Swap yellow values into adjacent slots of their correct positions
         for (let yIdx of yellowIndices) {
             let neighbors = [];
             for (let i = 0; i < 9; i++) {
@@ -396,7 +548,6 @@
             }
         }
 
-        // Ensure remaining cells do not accidentally match their secret positions
         for (let rIdx of indices) {
             if (board[rIdx] === secret[rIdx]) {
                 let validTarget = indices.find(o => o !== rIdx && board[o] !== secret[o]);
@@ -427,7 +578,6 @@
 
         attemptCount = data.triesToday;
         
-        // Globally shared deterministic secret combination for today
         let dayNum = today;
         let secretSeed = (dayNum * 9301 + 49297) % 233280;
         function secretRandom() {
@@ -442,7 +592,6 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
-        // Globally shared starter board seed for today
         let starterSeed = (dayNum * 73939 + 1319) % 233280;
         function starterRandom() {
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
@@ -490,7 +639,7 @@
 
         document.getElementById('message').innerText = '';
         if (data.todayWon) {
-            triggerWinDisplay(attemptCount);
+            triggerWinDisplay(attemptCount, false);
         } else {
             document.getElementById('win-container').style.display = 'none';
             document.getElementById('game-workspace').style.display = 'block';
@@ -502,6 +651,7 @@
     }
 
     function resetVault() {
+        soundClick();
         let data = getDailyHistory();
         let dayNum = getEastern5AMDayNumber();
         let starterSeed = (dayNum * 73939 + 1319) % 233280;
@@ -534,12 +684,14 @@
 
     function selectCell(index) {
         if (lockedCells[index]) return;
+        soundClick();
         activeCellIndex = index;
         render();
     }
 
     function placeNumber(num) {
         if (lockedCells[activeCellIndex]) return;
+        soundClick();
 
         let existingIndex = boardState.indexOf(num);
         
@@ -583,12 +735,14 @@
 
     function evaluateBoard() {
         if (boardState.some(val => val === null)) {
+            soundFail();
             document.getElementById('message').style.color = '#f87171';
             document.getElementById('message').innerText = 'All tumblers must have numbers before testing!';
             return;
         }
 
         let allCorrect = true;
+        let newlyLocked = false;
 
         for (let i = 0; i < 9; i++) {
             if (lockedCells[i]) continue;
@@ -597,6 +751,7 @@
             if (userVal === secretCombination[i]) {
                 lockedCells[i] = true;
                 cellHints[i] = 'green';
+                newlyLocked = true;
             } else {
                 allCorrect = false;
                 let correctPos = secretCombination.indexOf(userVal);
@@ -608,15 +763,34 @@
             }
         }
 
+        if (newlyLocked && !allCorrect) {
+            soundLock();
+        } else if (!allCorrect) {
+            soundFail();
+            // Trigger grid shake animation on failure
+            const gridEl = document.getElementById('grid');
+            gridEl.classList.add('shake');
+            setTimeout(() => gridEl.classList.remove('shake'), 400);
+        }
+
+        // Trigger card flip animation on grid during test
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => c.classList.add('flip'));
+        setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
+
         let data = getDailyHistory();
 
         if (allCorrect || lockedCells.every(val => val)) {
-            data.todayWon = true;
+            soundLock();
+            if (!data.todayWon) {
+                data.todayWon = true;
+                updateGlobalStats(true);
+            }
             data.board = boardState;
             data.locked = lockedCells;
             data.hints = cellHints;
             saveDailyHistory(data);
-            triggerWinDisplay(data.triesToday);
+            triggerWinDisplay(data.triesToday, true);
         } else {
             data.triesToday++;
             data.board = boardState;
@@ -639,7 +813,32 @@
         }
     }
 
-    function triggerWinDisplay(tries) {
+    function generateShareEmojiGrid() {
+        let gridStr = "";
+        for (let i = 0; i < 9; i++) {
+            if (lockedCells[i]) gridStr += "🟩";
+            else if (cellHints[i] === 'yellow') gridStr += "🟨";
+            else gridStr += "⬛";
+            if ((i + 1) % 3 === 0) gridStr += "\n";
+        }
+        return gridStr.trim();
+    }
+
+    function shareResults(tries) {
+        let percentile = calculatePercentile(tries);
+        let emojiGrid = generateShareEmojiGrid();
+        let shareText = `🔐 Safe Cracker - Attempt #${tries}\nBeat ${percentile}% of players today!\n\n${emojiGrid}\nPlay here: ${window.location.href}`;
+
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(shareText).then(() => {
+                alert('Results copied to clipboard!');
+            });
+        } else {
+            prompt('Copy your results:', shareText);
+        }
+    }
+
+    function triggerWinDisplay(tries, isNewWin) {
         document.getElementById('game-workspace').style.display = 'none';
         const winContainer = document.getElementById('win-container');
         winContainer.style.display = 'block';
@@ -654,7 +853,8 @@
                     📊 Cracked in <strong>${tries} ${tries === 1 ? 'attempt' : 'attempts'}</strong><br>
                     🏆 You performed better than <strong>${percentile}%</strong> of safe crackers today!
                 </div>
-                <div style="margin-top: 20px; color: var(--text-muted); font-size: 0.85em;">
+                <button class="btn" onclick="shareResults(${tries})" style="margin: 15px 0 10px 0; background: var(--accent-green); color: #fff;">📋 Share Score</button>
+                <div style="margin-top: 15px; color: var(--text-muted); font-size: 0.85em;">
                     Next vault lock opens at 5:00 AM ET.
                 </div>
             </div>
