@@ -684,6 +684,11 @@
         document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
         document.getElementById(`tab-${mode}`).classList.add('active');
 
+        // Reset workspace layout and remove vault door open transformation glitch
+        document.getElementById('win-container').style.display = 'none';
+        document.getElementById('game-workspace').style.display = 'block';
+        document.getElementById('grid').classList.remove('vault-door-open');
+
         if (mode === 'daily') {
             document.getElementById('timer-label').innerHTML = `Resets 5 AM ET: <span id="daily-timer" style="color: var(--accent-gold); font-weight: bold;">--:--:--</span>`;
             initGame();
@@ -811,6 +816,7 @@
 
         setupActiveCell();
         document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
         if (data.todayWon) {
             triggerWinDisplay(attemptCount);
         } else {
@@ -864,6 +870,7 @@
 
         setupActiveCell();
         document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
         document.getElementById('win-container').style.display = 'none';
         document.getElementById('game-workspace').style.display = 'block';
         document.getElementById('attempt-counter').innerText = `Attempt #1`;
@@ -1172,6 +1179,7 @@
 
         setupActiveCell();
         document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
         document.getElementById('win-container').style.display = 'none';
         document.getElementById('game-workspace').style.display = 'block';
         document.getElementById('attempt-counter').innerText = `Attempt #1`;
@@ -1180,12 +1188,12 @@
     }
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_forced_clean_v11');
+        let raw = localStorage.getItem('safe_cracker_fix_glitch_v12');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try { return JSON.parse(raw); } catch(e) { return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null }; }
     }
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_forced_clean_v11', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_fix_glitch_v12', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -1235,8 +1243,6 @@
     }
 
     window.onload = () => {
-        // Complete local storage wipe to prevent any conflicting cache/saved states
-        localStorage.clear();
         initGame();
     };
 </script>
