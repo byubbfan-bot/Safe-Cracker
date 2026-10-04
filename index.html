@@ -270,7 +270,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> Each round starts with 1–2 greens and 2–3 yellows globally shared for today. Swap numbers manually to crack the rest, then click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> Starts with 1–2 greens and 2–3 yellows globally shared for today. Swap numbers manually to crack the rest, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler correct (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching).
     </div>
@@ -335,7 +335,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_fixed_v4');
+        let raw = localStorage.getItem('safe_cracker_stable_v5');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try {
             return JSON.parse(raw);
@@ -345,7 +345,7 @@
     }
 
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_fixed_v4', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_stable_v5', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -358,32 +358,29 @@
         return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
     }
 
-    function generateStrictStarterBoard(secret, seededRand) {
+    function generateSafeStarterBoard(secret, seededRand) {
         let board = [...secret];
         let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
         
+        // Fisher-Yates shuffle indices using the daily seed
         for (let i = indices.length - 1; i > 0; i--) {
             let j = Math.floor(seededRand() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
+        // Pick 1 or 2 greens, and 2 or 3 yellows
         let numGreens = 1 + Math.floor(seededRand() * 2);   // 1 or 2
         let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
 
-        let greenIndices = [];
-        for (let g = 0; g < numGreens; g++) {
-            greenIndices.push(indices.shift());
-        }
+        let greenIndices = indices.splice(0, numGreens);
+        let yellowIndices = indices.splice(0, numYellows);
 
-        let yellowIndices = [];
-        for (let y = 0; y < numYellows; y++) {
-            yellowIndices.push(indices.shift());
-        }
-
+        // Keep correct values for green positions
         for (let gIdx of greenIndices) {
             board[gIdx] = secret[gIdx];
         }
 
+        // Swap yellow values into adjacent slots of their correct positions
         for (let yIdx of yellowIndices) {
             let neighbors = [];
             for (let i = 0; i < 9; i++) {
@@ -399,20 +396,14 @@
             }
         }
 
-        let remaining = indices;
-        if (remaining.length >= 2) {
-            for (let i = remaining.length - 1; i > 0; i--) {
-                let j = Math.floor(seededRand() * (i + 1));
-                [board[remaining[i]], board[remaining[j]]] = [board[remaining[j]], board[remaining[i]]];
-            }
-            for (let rIdx of remaining) {
-                if (board[rIdx] === secret[rIdx]) {
-                    let other = remaining.find(o => o !== rIdx && board[o] !== secret[o]);
-                    if (other !== undefined) {
-                        let temp = board[rIdx];
-                        board[rIdx] = board[other];
-                        board[other] = temp;
-                    }
+        // Ensure remaining cells do not accidentally match their secret positions
+        for (let rIdx of indices) {
+            if (board[rIdx] === secret[rIdx]) {
+                let validTarget = indices.find(o => o !== rIdx && board[o] !== secret[o]);
+                if (validTarget !== undefined) {
+                    let temp = board[rIdx];
+                    board[rIdx] = board[validTarget];
+                    board[validTarget] = temp;
                 }
             }
         }
@@ -436,6 +427,7 @@
 
         attemptCount = data.triesToday;
         
+        // Globally shared deterministic secret combination for today
         let dayNum = today;
         let secretSeed = (dayNum * 9301 + 49297) % 233280;
         function secretRandom() {
@@ -450,6 +442,7 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
+        // Globally shared starter board seed for today
         let starterSeed = (dayNum * 73939 + 1319) % 233280;
         function starterRandom() {
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
@@ -467,7 +460,7 @@
                 lockedCells = Array(9).fill(true);
                 cellHints = Array(9).fill('green');
             } else {
-                boardState = generateStrictStarterBoard(secretCombination, starterRandom);
+                boardState = generateSafeStarterBoard(secretCombination, starterRandom);
                 cellHints = Array(9).fill(null);
                 for (let i = 0; i < 9; i++) {
                     if (boardState[i] === secretCombination[i]) {
@@ -516,7 +509,7 @@
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
             return starterSeed / 233280;
         }
-        let freshBoard = generateStrictStarterBoard(secretCombination, starterRandom);
+        let freshBoard = generateSafeStarterBoard(secretCombination, starterRandom);
         
         for (let i = 0; i < 9; i++) {
             if (!lockedCells[i]) {
@@ -563,7 +556,6 @@
             boardState[activeCellIndex] = num;
             cellHints[activeCellIndex] = null;
             
-            // Automatically advance to the next unlocked cell so typing is frictionless
             for (let i = 1; i <= 9; i++) {
                 let nextIdx = (activeCellIndex + i) % 9;
                 if (!lockedCells[nextIdx]) {
