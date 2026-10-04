@@ -271,7 +271,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> Each round starts with 1–2 greens and 2–3 yellows globally shared for today. Swap numbers manually to crack the rest, then click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> Today's vault starts with exactly 1–2 greens and 2–3 yellows globally shared for everyone. Swap unlocked numbers manually to crack the rest, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler correct (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching).
     </div>
@@ -336,7 +336,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_shared_strict_v1');
+        let raw = localStorage.getItem('safe_cracker_strict_shared_v3');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try {
             return JSON.parse(raw);
@@ -346,7 +346,7 @@
     }
 
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_shared_strict_v1', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_strict_shared_v3', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -359,52 +359,69 @@
         return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
     }
 
-    function generateSharedDailyStarterBoard(secret, seededRand, existingLocked = Array(9).fill(false), existingBoard = null) {
-        let board = existingBoard ? [...existingBoard] : [...secret];
-        let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8].filter(i => !existingLocked[i]);
+    function generateStrictStarterBoard(secret, seededRand) {
+        let board = [...secret];
+        let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
         
         for (let i = indices.length - 1; i > 0; i--) {
             let j = Math.floor(seededRand() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // Exactly 1 or 2 greens, and exactly 2 or 3 yellows
-        let numGreens = 1 + Math.floor(seededRand() * 2); // 1 or 2
+        // STRICT CONSTRAINTS: Exactly 1 or 2 green tiles, exactly 2 or 3 yellow tiles
+        let numGreens = 1 + Math.floor(seededRand() * 2);   // 1 or 2
         let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
 
-        let chosenGreens = [];
-        for (let g = 0; g < numGreens && indices.length > 0; g++) {
-            chosenGreens.push(indices.shift());
+        let greenIndices = [];
+        for (let g = 0; g < numGreens; g++) {
+            greenIndices.push(indices.shift());
         }
 
-        let chosenYellows = [];
-        for (let y = 0; y < numYellows && indices.length > 0; y++) {
-            chosenYellows.push(indices.shift());
+        let yellowIndices = [];
+        for (let y = 0; y < numYellows; y++) {
+            yellowIndices.push(indices.shift());
         }
 
-        // Ensure greens are correct
-        for (let gIdx of chosenGreens) {
+        // 1. Lock in the green tiles (correct positions)
+        for (let gIdx of greenIndices) {
             board[gIdx] = secret[gIdx];
         }
 
-        // Ensure yellows are adjacent to their correct positions but not correct themselves
-        let setYellow = (targetIdx) => {
+        // 2. Set yellow tiles to be adjacent to their correct positions, but not correct themselves
+        for (let yIdx of yellowIndices) {
             let neighbors = [];
             for (let i = 0; i < 9; i++) {
-                if (isAdjacent(i, targetIdx) && i !== targetIdx && !existingLocked[i] && !chosenGreens.includes(i)) {
+                if (isAdjacent(i, yIdx) && i !== yIdx && !greenIndices.includes(i)) {
                     neighbors.push(i);
                 }
             }
             if (neighbors.length > 0) {
                 let n = neighbors[Math.floor(seededRand() * neighbors.length)];
                 let temp = board[n];
-                board[n] = board[targetIdx];
-                board[targetIdx] = temp;
+                board[n] = board[yIdx];
+                board[yIdx] = temp;
             }
-        };
+        }
 
-        for (let yIdx of chosenYellows) {
-            setYellow(yIdx);
+        // 3. Ensure remaining positions are strictly incorrect (neither green nor yellow)
+        let remaining = indices;
+        if (remaining.length >= 2) {
+            for (let i = remaining.length - 1; i > 0; i--) {
+                let j = Math.floor(seededRand() * (i + 1));
+                [board[remaining[i]], board[remaining[j]]] = [board[remaining[j]], board[remaining[i]]];
+            }
+            // Double check that no remaining cell accidentally landed on its correct secret position
+            for (let rIdx of remaining) {
+                if (board[rIdx] === secret[rIdx]) {
+                    // Force swap with another remaining cell
+                    let other = remaining.find(o => o !== rIdx && board[o] !== secret[rIdx]);
+                    if (other !== undefined) {
+                        let temp = board[rIdx];
+                        board[rIdx] = board[other];
+                        board[other] = temp;
+                    }
+                }
+            }
         }
 
         return board;
@@ -426,7 +443,7 @@
 
         attemptCount = data.triesToday;
         
-        // Globally shared deterministic seed for today so every user gets the exact same puzzle and starter board
+        // Globally shared deterministic seed for today so every user worldwide gets the exact same puzzle and initial layout
         let dayNum = today;
         let secretSeed = (dayNum * 9301 + 49297) % 233280;
         function secretRandom() {
@@ -441,7 +458,7 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
-        let starterSeed = (dayNum * 73939 + (attemptCount * 1319)) % 233280;
+        let starterSeed = (dayNum * 73939 + 1319) % 233280; // Fixed seed per day for the initial starting board
         function starterRandom() {
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
             return starterSeed / 233280;
@@ -458,7 +475,7 @@
                 lockedCells = Array(9).fill(true);
                 cellHints = Array(9).fill('green');
             } else {
-                boardState = generateSharedDailyStarterBoard(secretCombination, starterRandom, lockedCells, null);
+                boardState = generateStrictStarterBoard(secretCombination, starterRandom);
                 cellHints = Array(9).fill(null);
                 for (let i = 0; i < 9; i++) {
                     if (boardState[i] === secretCombination[i]) {
@@ -501,26 +518,19 @@
 
     function resetVault() {
         let data = getDailyHistory();
+        
+        // Reset only unlocked cells back to their initial unlocked state for this round without computer interference
         let dayNum = getEastern5AMDayNumber();
-        let starterSeed = (dayNum * 73939 + (attemptCount * 1319)) % 233280;
+        let starterSeed = (dayNum * 73939 + 1319) % 233280;
         function starterRandom() {
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
             return starterSeed / 233280;
         }
-
-        // Reset only unlocked cells back to shuffled state preserving locked cells and initial hints
-        let unlockedVals = [];
-        for (let i = 0; i < 9; i++) {
-            if (!lockedCells[i]) unlockedVals.push(boardState[i]);
-        }
-        for (let i = unlockedVals.length - 1; i > 0; i--) {
-            let j = Math.floor(starterRandom() * (i + 1));
-            [unlockedVals[i], unlockedVals[j]] = [unlockedVals[j], unlockedVals[i]];
-        }
-        let idx = 0;
+        let freshBoard = generateStrictStarterBoard(secretCombination, starterRandom);
+        
         for (let i = 0; i < 9; i++) {
             if (!lockedCells[i]) {
-                boardState[i] = unlockedVals[idx++];
+                boardState[i] = freshBoard[i];
                 cellHints[i] = null;
             }
         }
