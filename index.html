@@ -271,7 +271,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> Today's vault starts with exactly 1–2 greens and 2–3 yellows globally shared for everyone. Swap unlocked numbers manually to crack the rest, then click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> Each round starts with 1–2 greens and 2–3 yellows globally shared for today. Swap numbers manually to crack the rest, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler correct (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching).
     </div>
@@ -368,7 +368,6 @@
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // STRICT CONSTRAINTS: Exactly 1 or 2 green tiles, exactly 2 or 3 yellow tiles
         let numGreens = 1 + Math.floor(seededRand() * 2);   // 1 or 2
         let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
 
@@ -382,12 +381,10 @@
             yellowIndices.push(indices.shift());
         }
 
-        // 1. Lock in the green tiles (correct positions)
         for (let gIdx of greenIndices) {
             board[gIdx] = secret[gIdx];
         }
 
-        // 2. Set yellow tiles to be adjacent to their correct positions, but not correct themselves
         for (let yIdx of yellowIndices) {
             let neighbors = [];
             for (let i = 0; i < 9; i++) {
@@ -403,18 +400,15 @@
             }
         }
 
-        // 3. Ensure remaining positions are strictly incorrect (neither green nor yellow)
         let remaining = indices;
         if (remaining.length >= 2) {
             for (let i = remaining.length - 1; i > 0; i--) {
                 let j = Math.floor(seededRand() * (i + 1));
                 [board[remaining[i]], board[remaining[j]]] = [board[remaining[j]], board[remaining[i]]];
             }
-            // Double check that no remaining cell accidentally landed on its correct secret position
             for (let rIdx of remaining) {
                 if (board[rIdx] === secret[rIdx]) {
-                    // Force swap with another remaining cell
-                    let other = remaining.find(o => o !== rIdx && board[o] !== secret[rIdx]);
+                    let other = remaining.find(o => o !== rIdx && board[o] !== secret[o]);
                     if (other !== undefined) {
                         let temp = board[rIdx];
                         board[rIdx] = board[other];
@@ -443,7 +437,6 @@
 
         attemptCount = data.triesToday;
         
-        // Globally shared deterministic seed for today so every user worldwide gets the exact same puzzle and initial layout
         let dayNum = today;
         let secretSeed = (dayNum * 9301 + 49297) % 233280;
         function secretRandom() {
@@ -458,7 +451,7 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
-        let starterSeed = (dayNum * 73939 + 1319) % 233280; // Fixed seed per day for the initial starting board
+        let starterSeed = (dayNum * 73939 + 1319) % 233280;
         function starterRandom() {
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
             return starterSeed / 233280;
@@ -518,8 +511,6 @@
 
     function resetVault() {
         let data = getDailyHistory();
-        
-        // Reset only unlocked cells back to their initial unlocked state for this round without computer interference
         let dayNum = getEastern5AMDayNumber();
         let starterSeed = (dayNum * 73939 + 1319) % 233280;
         function starterRandom() {
