@@ -569,7 +569,7 @@
     function getSecurityRank(wonCount) {
         if (wonCount >= 25) return { title: "👑 Legendary Heist Master", short: "👑 Master" };
         if (wonCount >= 10) return { title: "🕵️ Master Safecracker", short: "🕵️ Safecracker" };
-        if (wonCount >= 3) return { title: "🛡️️ Vault Tech", short: "🛡️ Vault Tech" };
+        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️ Vault Tech" };
         return { title: "🔓 Apprentice Locksmith", short: "🔓 Apprentice" };
     }
 
@@ -585,7 +585,7 @@
         try { return JSON.parse(raw); } catch(e) { return { played: 0, won: 0, streak: 0 }; }
     }
     function updateGlobalStats(wonGame) {
-        if (isCustomChallenge) return; // Don't count archive or custom challenge toward daily main stats
+        if (isCustomChallenge) return;
         let stats = getGlobalStats();
         stats.played++;
         if (wonGame) {
@@ -712,7 +712,6 @@
     }
 
     function initGame() {
-        // Check URL parameters for custom challenge seed (e.g., ?challenge=12345)
         const urlParams = new URLSearchParams(window.location.search);
         const challengeParam = urlParams.get('challenge');
         if (challengeParam) {
