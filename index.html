@@ -221,7 +221,6 @@
             font-size: 0.9em;
             min-height: 24px;
         }
-        /* Win Banner Graphic Overlay */
         .result-graphic {
             padding: 25px 20px;
             border-radius: 10px;
@@ -336,7 +335,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_strict_shared_v3');
+        let raw = localStorage.getItem('safe_cracker_fixed_v4');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try {
             return JSON.parse(raw);
@@ -346,7 +345,7 @@
     }
 
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_strict_shared_v3', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_fixed_v4', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -564,6 +563,7 @@
             boardState[activeCellIndex] = num;
             cellHints[activeCellIndex] = null;
             
+            // Automatically advance to the next unlocked cell so typing is frictionless
             for (let i = 1; i <= 9; i++) {
                 let nextIdx = (activeCellIndex + i) % 9;
                 if (!lockedCells[nextIdx]) {
