@@ -134,7 +134,6 @@
             margin-bottom: 25px;
             transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        /* Vault Door Opening Animation */
         .grid-3x3.vault-door-open {
             transform: perspective(800px) rotateY(-80deg) scale(0.95);
             transform-origin: left;
@@ -513,12 +512,12 @@
     }
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_door_swing_v1');
+        let raw = localStorage.getItem('safe_cracker_fresh_reset_v6');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try { return JSON.parse(raw); } catch(e) { return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null }; }
     }
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_door_swing_v1', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_fresh_reset_v6', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -781,7 +780,6 @@
         }
 
         if (allCorrect || lockedCells.every(val => val)) {
-            // Satisfying vault opening audio and visual door swing open animation
             soundVaultOpen();
             const gridEl = document.getElementById('grid');
             gridEl.classList.add('vault-door-open');
