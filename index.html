@@ -271,7 +271,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> Each new attempt starts with guaranteed clues (at least 1 green lock and 2 yellow hints). Swap numbers around manually, then click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> Each round starts with 1–2 greens and 2–3 yellows globally shared for today. Swap numbers manually to crack the rest, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler correct (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching).
     </div>
@@ -336,7 +336,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_persistent_state_v2');
+        let raw = localStorage.getItem('safe_cracker_shared_strict_v1');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try {
             return JSON.parse(raw);
@@ -346,7 +346,7 @@
     }
 
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_persistent_state_v2', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_shared_strict_v1', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -359,7 +359,7 @@
         return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
     }
 
-    function generateGuaranteedStarterBoard(secret, seededRand, existingLocked = Array(9).fill(false), existingBoard = null) {
+    function generateSharedDailyStarterBoard(secret, seededRand, existingLocked = Array(9).fill(false), existingBoard = null) {
         let board = existingBoard ? [...existingBoard] : [...secret];
         let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8].filter(i => !existingLocked[i]);
         
@@ -368,35 +368,43 @@
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // Find available unlocked slots to assign at least 1 green and 2 yellows
-        let unlockedIndices = indices;
-        if (unlockedIndices.length >= 3) {
-            let gIdx = unlockedIndices[0];
-            // Ensure gIdx is correct
+        // Exactly 1 or 2 greens, and exactly 2 or 3 yellows
+        let numGreens = 1 + Math.floor(seededRand() * 2); // 1 or 2
+        let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
+
+        let chosenGreens = [];
+        for (let g = 0; g < numGreens && indices.length > 0; g++) {
+            chosenGreens.push(indices.shift());
+        }
+
+        let chosenYellows = [];
+        for (let y = 0; y < numYellows && indices.length > 0; y++) {
+            chosenYellows.push(indices.shift());
+        }
+
+        // Ensure greens are correct
+        for (let gIdx of chosenGreens) {
             board[gIdx] = secret[gIdx];
+        }
 
-            let y1Idx = unlockedIndices[1];
-            let y2Idx = unlockedIndices[2];
-
-            let setYellow = (targetIdx) => {
-                let neighbors = [];
-                for (let i = 0; i < 9; i++) {
-                    if (isAdjacent(i, targetIdx) && i !== targetIdx && !existingLocked[i]) {
-                        neighbors.push(i);
-                    }
+        // Ensure yellows are adjacent to their correct positions but not correct themselves
+        let setYellow = (targetIdx) => {
+            let neighbors = [];
+            for (let i = 0; i < 9; i++) {
+                if (isAdjacent(i, targetIdx) && i !== targetIdx && !existingLocked[i] && !chosenGreens.includes(i)) {
+                    neighbors.push(i);
                 }
-                for (let n of neighbors) {
-                    if (board[n] !== secret[n] && n !== gIdx) {
-                        let temp = board[n];
-                        board[n] = board[targetIdx];
-                        board[targetIdx] = temp;
-                        break;
-                    }
-                }
-            };
+            }
+            if (neighbors.length > 0) {
+                let n = neighbors[Math.floor(seededRand() * neighbors.length)];
+                let temp = board[n];
+                board[n] = board[targetIdx];
+                board[targetIdx] = temp;
+            }
+        };
 
-            setYellow(y1Idx);
-            setYellow(y2Idx);
+        for (let yIdx of chosenYellows) {
+            setYellow(yIdx);
         }
 
         return board;
@@ -418,25 +426,27 @@
 
         attemptCount = data.triesToday;
         
+        // Globally shared deterministic seed for today so every user gets the exact same puzzle and starter board
         let dayNum = today;
-        let seed = (dayNum * 9301 + (attemptCount * 49297)) % 233280;
-        function seededRandom() {
-            seed = (seed * 9301 + 49297) % 233280;
-            return seed / 233280;
+        let secretSeed = (dayNum * 9301 + 49297) % 233280;
+        function secretRandom() {
+            secretSeed = (secretSeed * 9301 + 49297) % 233280;
+            return secretSeed / 233280;
         }
 
         let pool = [...availableNumbers];
         secretCombination = [];
-        let tempSeed = (dayNum * 9301 + 49297) % 233280;
-        function secretRandom() {
-            tempSeed = (tempSeed * 9301 + 49297) % 233280;
-            return tempSeed / 233280;
-        }
         while (pool.length > 0) {
             let index = Math.floor(secretRandom() * pool.length);
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
+        let starterSeed = (dayNum * 73939 + (attemptCount * 1319)) % 233280;
+        function starterRandom() {
+            starterSeed = (starterSeed * 9301 + 49297) % 233280;
+            return starterSeed / 233280;
+        }
+
         if (data.board && !data.todayWon) {
             boardState = data.board;
             lockedCells = data.locked;
@@ -448,7 +458,7 @@
                 lockedCells = Array(9).fill(true);
                 cellHints = Array(9).fill('green');
             } else {
-                boardState = generateGuaranteedStarterBoard(secretCombination, seededRandom, lockedCells, null);
+                boardState = generateSharedDailyStarterBoard(secretCombination, starterRandom, lockedCells, null);
                 cellHints = Array(9).fill(null);
                 for (let i = 0; i < 9; i++) {
                     if (boardState[i] === secretCombination[i]) {
@@ -492,19 +502,19 @@
     function resetVault() {
         let data = getDailyHistory();
         let dayNum = getEastern5AMDayNumber();
-        let seed = (dayNum * 9301 + (attemptCount * 49297)) % 233280;
-        function seededRandom() {
-            seed = (seed * 9301 + 49297) % 233280;
-            return seed / 233280;
+        let starterSeed = (dayNum * 73939 + (attemptCount * 1319)) % 233280;
+        function starterRandom() {
+            starterSeed = (starterSeed * 9301 + 49297) % 233280;
+            return starterSeed / 233280;
         }
 
-        // Reset only unlocked cells back to a shuffled state preserving locked cells
+        // Reset only unlocked cells back to shuffled state preserving locked cells and initial hints
         let unlockedVals = [];
         for (let i = 0; i < 9; i++) {
             if (!lockedCells[i]) unlockedVals.push(boardState[i]);
         }
         for (let i = unlockedVals.length - 1; i > 0; i--) {
-            let j = Math.floor(seededRandom() * (i + 1));
+            let j = Math.floor(starterRandom() * (i + 1));
             [unlockedVals[i], unlockedVals[j]] = [unlockedVals[j], unlockedVals[i]];
         }
         let idx = 0;
