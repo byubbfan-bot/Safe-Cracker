@@ -682,11 +682,14 @@
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        // Strict parameters: min 1 green, 2 yellows; max 2 greens, 3 yellows for Daily/Standard
-        let numGreens = 1 + Math.floor(seededRand() * 2); // 1 or 2
-        let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
+        let numGreens = 2; // Default for standard/practice
+        let numYellows = 3; // Default for standard/practice
 
-        if (mode === 'easy') {
+        if (mode === 'daily' || mode === 'standard') {
+            // Strictly bounded to minimum 1 green, 2 yellows and max 2 greens, 3 yellows
+            numGreens = 1 + Math.floor(seededRand() * 2); // Yields 1 or 2
+            numYellows = 2 + Math.floor(seededRand() * 2); // Yields 2 or 3
+        } else if (mode === 'easy') {
             numGreens = 3;
             numYellows = 4;
         } else if (mode === 'master') {
@@ -754,7 +757,7 @@
         }
 
         lockedCells = Array(9).fill(false);
-        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, 'standard');
+        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, 'daily');
         cellHints = Array(9).fill(null);
         for (let i = 0; i < 9; i++) {
             if (boardState[i] === secretCombination[i]) {
