@@ -129,17 +129,8 @@
         .daily-tracker strong {
             color: var(--accent-gold);
         }
-        .hud {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            margin-bottom: 20px;
-            font-weight: 700;
-            font-size: 0.95em;
-            background: #090d16;
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
+        .grid-container-wrapper {
+            position: relative;
         }
         .grid-3x3 {
             display: grid;
@@ -153,6 +144,20 @@
             transform: perspective(800px) rotateY(-80deg) scale(0.95);
             transform-origin: left;
             opacity: 0.2;
+        }
+        .grid-mask {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(9, 13, 22, 0.92);
+            backdrop-filter: blur(6px);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            gap: 12px;
+            border: 2px solid var(--border-color);
         }
         .cell {
             aspect-ratio: 1;
@@ -427,12 +432,15 @@
         <div style="font-size: 0.8em; color: var(--text-muted);" id="timer-label">Resets 5 AM ET: <span id="daily-timer" style="color: var(--accent-gold); font-weight: bold;">--:--:--</span></div>
     </div>
 
-    <div class="hud">
-        <button onclick="resetVault()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.85em; font-weight:600; text-decoration:underline;">Reset Vault</button>
-    </div>
-
     <div id="game-workspace">
-        <div id="grid" class="grid-3x3"></div>
+        <div class="grid-container-wrapper">
+            <div id="grid" class="grid-3x3"></div>
+            <div id="start-mask" class="grid-mask">
+                <div style="font-weight: 800; font-size: 1.1em; color: var(--accent-gold);">🔒 Vault Secured</div>
+                <div style="font-size: 0.8em; color: var(--text-muted); padding: 0 15px;">Ready to crack the combination? Timer starts on click.</div>
+                <button class="btn" onclick="startVaultGame()" style="width: auto; padding: 10px 24px; margin-top: 6px;">▶ Play Vault</button>
+            </div>
+        </div>
 
         <div class="catalog-section">
             <div class="catalog-title">Combination Dials</div>
@@ -506,13 +514,14 @@
     let activeCellIndex = 0;
     let lockedCells = Array(9).fill(false);
     let cellHints = Array(9).fill(null);
-    let attemptHistory = []; // Tracks 3x3 block strings per attempt
+    let attemptHistory = [];
     let attemptCount = 1;
     let secondsElapsed = 0;
     let timerInterval = null;
     let activeMode = 'daily';
     let activePuzzleSeed = null;
     let soundEnabled = true;
+    let gameStarted = false;
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playTone(freq, type, duration, vol = 0.05) {
@@ -730,6 +739,10 @@
         let today = getEastern5AMDayNumber();
         activePuzzleSeed = today;
         attemptHistory = [];
+        gameStarted = false;
+        document.getElementById('start-mask').style.display = 'flex';
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById('timer-display').innerText = '0s';
         
         let secretSeed = (today * 9301 + 49297) % 233280;
         function secretRandom() {
@@ -772,7 +785,6 @@
         document.getElementById('win-container').style.display = 'none';
         document.getElementById('game-workspace').style.display = 'block';
         document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
-        startTimer();
         updateRankDisplay(getGlobalStats().won);
         render();
     }
@@ -780,6 +792,11 @@
     function initPracticeGame(mode) {
         attemptCount = 1;
         attemptHistory = [];
+        gameStarted = false;
+        document.getElementById('start-mask').style.display = 'flex';
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById('timer-display').innerText = '0s';
+
         let randomSeed = Math.floor(Math.random() * 100000);
         activePuzzleSeed = randomSeed;
 
@@ -823,8 +840,14 @@
         document.getElementById('win-container').style.display = 'none';
         document.getElementById('game-workspace').style.display = 'block';
         document.getElementById('attempt-counter').innerText = `Attempt #1`;
-        startTimer();
         render();
+    }
+
+    function startVaultGame() {
+        soundClick();
+        gameStarted = true;
+        document.getElementById('start-mask').style.display = 'none';
+        startTimer();
     }
 
     function setupActiveCell() {
@@ -837,24 +860,15 @@
         }
     }
 
-    function resetVault() {
-        soundClick();
-        if (activeMode === 'daily') {
-            initGame();
-        } else {
-            initPracticeGame(activeMode);
-        }
-    }
-
     function selectCell(index) {
-        if (lockedCells[index]) return;
+        if (!gameStarted || lockedCells[index]) return;
         soundClick();
         activeCellIndex = index;
         render();
     }
 
     function placeNumber(num) {
-        if (lockedCells[activeCellIndex]) return;
+        if (!gameStarted || lockedCells[activeCellIndex]) return;
         soundClick();
 
         let existingIndex = boardState.indexOf(num);
@@ -903,6 +917,7 @@
     }
 
     function evaluateBoard() {
+        if (!gameStarted) return;
         if (boardState.some(val => val === null)) {
             soundFail();
             document.getElementById('message').style.color = '#f87171';
@@ -976,8 +991,19 @@
     }
 
     function generateShareEmojiGrid() {
-        // Joins the 3x3 emoji blocks with a clean double newline spacing between attempts
-        return attemptHistory.join('\n\n');
+        // Pairs up attempt grids side-by-side (two per line)
+        let pairs = [];
+        for (let i = 0; i < attemptHistory.length; i += 2) {
+            let leftBlock = attemptHistory[i].split('\n');
+            let rightBlock = (i + 1 < attemptHistory.length) ? attemptHistory[i + 1].split('\n') : ["   ", "   ", "   "];
+            
+            let combinedLine1 = leftBlock[0] + "    " + rightBlock[0];
+            let combinedLine2 = leftBlock[1] + "    " + rightBlock[1];
+            let combinedLine3 = leftBlock[2] + "    " + rightBlock[2];
+            
+            pairs.push(combinedLine1 + '\n' + combinedLine2 + '\n' + combinedLine3);
+        }
+        return pairs.join('\n\n');
     }
 
     function shareResults(tries) {
@@ -1076,7 +1102,7 @@
         boardState.forEach((val, idx) => {
             const cell = document.createElement('div');
             let cls = 'cell';
-            if (idx === activeCellIndex) cls += ' selected';
+            if (idx === activeCellIndex && gameStarted) cls += ' selected';
             if (lockedCells[idx]) {
                 cls += ' locked';
             } else if (cellHints[idx] === 'yellow') {
