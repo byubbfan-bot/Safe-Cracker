@@ -271,7 +271,7 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> The vault auto-generates a pre-test combination to give you starting clues! Swap or adjust digits and click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> The vault already starts with a pre-filled combination and evaluated hints! Click any tumbler to swap digits, then click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler clicked into correct position (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching) to this tumbler.
     </div>
@@ -359,20 +359,14 @@
     }
 
     function generateComputerStarterBoard(secret, seededRand) {
-        // Start with a copy of the secret combination
         let board = [...secret];
-        
-        // Pick 2 or 3 random indices to scramble so the player gets a mix of greens and yellows/wrong spots
-        let indicesToScramble = [];
         let poolIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
         
-        // Shuffle pool indices using seeded random
         for (let i = poolIndices.length - 1; i > 0; i--) {
             let j = Math.floor(seededRand() * (i + 1));
             [poolIndices[i], poolIndices[j]] = [poolIndices[j], poolIndices[i]];
         }
         
-        // Take 3 positions to swap around to guarantee some initial green locks and some displaced digits
         let pos1 = poolIndices[0];
         let pos2 = poolIndices[1];
         let pos3 = poolIndices[2];
@@ -404,15 +398,14 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
-        // If it's attempt #1 and user hasn't won yet, pre-fill with computer starter board and auto-evaluate initial hints!
         boardState = Array(9).fill(null);
         lockedCells = Array(9).fill(false);
         cellHints = Array(9).fill(null);
 
+        // Always pre-fill the board with numbers (computer-generated starter board for attempt 1, or empty/unlocked slots for subsequent attempts)
         if (attemptCount === 1 && !data.todayWon) {
             boardState = generateComputerStarterBoard(secretCombination, seededRandom);
             
-            // Instantly calculate initial hints so player starts with pre-baked green/yellow clues
             for (let i = 0; i < 9; i++) {
                 let userVal = boardState[i];
                 if (userVal === secretCombination[i]) {
@@ -425,6 +418,26 @@
                     } else {
                         cellHints[i] = null;
                     }
+                }
+            }
+        } else {
+            // For subsequent attempts, keep previously locked green cells and fill remaining slots automatically with leftover available numbers
+            let usedNums = [];
+            for (let i = 0; i < 9; i++) {
+                if (lockedCells[i]) usedNums.push(boardState[i]);
+            }
+            let remainingPool = availableNumbers.filter(n => !usedNums.includes(n));
+            
+            // Shuffle remaining pool
+            for (let i = remainingPool.length - 1; i > 0; i--) {
+                let j = Math.floor(seededRandom() * (i + 1));
+                [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
+            }
+
+            let poolIdx = 0;
+            for (let i = 0; i < 9; i++) {
+                if (!lockedCells[i]) {
+                    boardState[i] = remainingPool[poolIdx++];
                 }
             }
         }
@@ -447,7 +460,6 @@
     }
 
     function resetVault() {
-        // Resets the board for the current attempt
         let dayNum = getEastern5AMDayNumber();
         let seed = (dayNum * 9301 + 49297) % 233280;
         function seededRandom() {
@@ -474,9 +486,19 @@
                 }
             }
         } else {
+            let usedNums = [];
+            for (let i = 0; i < 9; i++) {
+                if (lockedCells[i]) usedNums.push(boardState[i]);
+            }
+            let remainingPool = availableNumbers.filter(n => !usedNums.includes(n));
+            for (let i = remainingPool.length - 1; i > 0; i--) {
+                let j = Math.floor(seededRandom() * (i + 1));
+                [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
+            }
+            let poolIdx = 0;
             for (let i = 0; i < 9; i++) {
                 if (!lockedCells[i]) {
-                    boardState[i] = null;
+                    boardState[i] = remainingPool[poolIdx++];
                     cellHints[i] = null;
                 }
             }
@@ -549,7 +571,7 @@
     function evaluateBoard() {
         if (boardState.some(val => val === null)) {
             document.getElementById('message').style.color = '#f87171';
-            document.getElementById('message').innerText = 'Fill all 9 tumblers before testing combination!';
+            document.getElementById('message').innerText = 'All tumblers must have numbers before testing!';
             return;
         }
 
