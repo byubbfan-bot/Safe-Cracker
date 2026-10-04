@@ -518,20 +518,6 @@
     const availableNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
     let activeMode = 'daily';
 
-    function getModeStateKey(mode) {
-        return `safe_cracker_mode_state_${mode}_v3`;
-    }
-
-    function loadModeState(mode) {
-        let raw = localStorage.getItem(getModeStateKey(mode));
-        if (!raw) return null;
-        try { return JSON.parse(raw); } catch(e) { return null; }
-    }
-
-    function saveModeState(mode, stateObj) {
-        localStorage.setItem(getModeStateKey(mode), JSON.stringify(stateObj));
-    }
-
     let secretCombination = [];
     let boardState = Array(9).fill(null);
     let activeCellIndex = 0;
@@ -747,34 +733,9 @@
         return board;
     }
 
-    function initGameMode(mode, forceFresh = false) {
+    function initGameMode(mode) {
         let today = getEastern5AMDayNumber();
-        activePuzzleSeed = (mode === 'daily') ? today : (hashCode(mode) + (loadModeState(mode)?.seedOffset || 0));
-
-        let saved = loadModeState(mode);
-        if (saved && saved.seed === activePuzzleSeed && !forceFresh) {
-            secretCombination = saved.secretCombination;
-            boardState = saved.boardState;
-            lockedCells = saved.lockedCells;
-            cellHints = saved.cellHints;
-            attemptCount = saved.attemptCount;
-            secondsElapsed = saved.secondsElapsed || 0;
-
-            setupActiveCell();
-            document.getElementById('message').innerText = '';
-            document.getElementById('grid').classList.remove('vault-door-open');
-            document.getElementById('win-container').style.display = 'none';
-            document.getElementById('game-workspace').style.display = 'block';
-
-            if (saved.todayWon) {
-                triggerWinDisplay(attemptCount);
-            }
-            document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
-            startTimerCustom(secondsElapsed);
-            updateRankDisplay(getGlobalStats().won);
-            render();
-            return;
-        }
+        activePuzzleSeed = (mode === 'daily') ? today : (mode === 'easy' ? 9999 : mode === 'standard' ? 8888 : 7777);
 
         let secretSeed = (activePuzzleSeed * 9301 + 49297) % 233280;
         function secretRandom() {
@@ -811,11 +772,8 @@
         }
 
         attemptCount = 1;
-        persistCurrentModeState(false);
-
         setupActiveCell();
         document.getElementById('message').innerText = '';
-        document.getElementById('grid').classList.remove('vault-door-open');
         document.getElementById('win-container').style.display = 'none';
         document.getElementById('game-workspace').style.display = 'block';
         document.getElementById('attempt-counter').innerText = `Attempt #1`;
@@ -824,36 +782,9 @@
         render();
     }
 
-    function hashCode(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            hash = (hash << 5) - hash + str.charCodeAt(i);
-            hash |= 0;
-        }
-        return Math.abs(hash);
-    }
-
-    function persistCurrentModeState(todayWon) {
-        saveModeState(activeMode, {
-            seed: activePuzzleSeed,
-            secretCombination,
-            boardState,
-            lockedCells,
-            cellHints,
-            attemptCount,
-            secondsElapsed,
-            todayWon
-        });
-    }
-
     function resetVault() {
         soundClick();
-        let saved = loadModeState(activeMode);
-        if (saved) {
-            saved.seedOffset = (saved.seedOffset || 0) + 1;
-            saveModeState(activeMode, saved);
-        }
-        initGameMode(activeMode, true);
+        initGameMode(activeMode);
     }
 
     function selectCell(index) {
@@ -886,8 +817,6 @@
                 }
             }
         }
-
-        persistCurrentModeState(false);
         render();
     }
 
@@ -933,15 +862,11 @@
         if (allCorrect || lockedCells.every(val => val)) {
             if (timerInterval) clearInterval(timerInterval);
             soundVaultOpen();
-            const gridEl = document.getElementById('grid');
-            if (gridEl) gridEl.classList.add('vault-door-open');
 
             if (activeMode === 'daily') {
                 updateGlobalStats(true);
             }
             
-            persistCurrentModeState(true);
-
             setTimeout(() => {
                 triggerWinDisplay(attemptCount);
             }, 650);
@@ -965,8 +890,6 @@
         setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
 
         attemptCount++;
-        persistCurrentModeState(false);
-
         document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
         document.getElementById('message').style.color = 'var(--accent-gold)';
         document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
@@ -1056,11 +979,8 @@
             item.onclick = () => {
                 closeArchiveModal();
                 activeMode = 'daily';
-                let state = loadModeState('daily') || {};
-                state.seed = pastDay;
-                state.seedOffset = 0;
-                saveModeState('daily', state);
-                initGameMode('daily', true);
+                activePuzzleSeed = pastDay;
+                initGameMode('daily');
             };
             container.appendChild(item);
         }
