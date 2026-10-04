@@ -39,6 +39,7 @@
             border: 2px solid #475569;
             text-align: center;
             position: relative;
+            overflow: hidden;
         }
         .vault-header {
             display: flex;
@@ -162,7 +163,12 @@
             grid-template-rows: repeat(3, 1fr);
             gap: 12px;
             margin-bottom: 25px;
-            width: 100%;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .grid-3x3.vault-door-open {
+            transform: perspective(800px) rotateY(-80deg) scale(0.95);
+            transform-origin: left;
+            opacity: 0.2;
         }
         .cell {
             aspect-ratio: 1;
@@ -176,6 +182,7 @@
             cursor: pointer;
             transition: transform 0.1s ease, border-color 0.15s ease, background-color 0.3s ease;
             position: relative;
+            perspective: 1000px;
         }
         .cell:hover:not(.locked) {
             border-color: var(--accent-gold);
@@ -516,8 +523,6 @@
 
 <script>
     const availableNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let activeMode = 'daily';
-
     let secretCombination = [];
     let boardState = Array(9).fill(null);
     let activeCellIndex = 0;
@@ -526,6 +531,7 @@
     let attemptCount = 1;
     let secondsElapsed = 0;
     let timerInterval = null;
+    let activeMode = 'daily';
     let activePuzzleSeed = null;
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -586,20 +592,14 @@
     }
     setInterval(updateDailyCountdown, 1000);
 
-    function startTimerCustom(startSec) {
+    function startTimer() {
         if (timerInterval) clearInterval(timerInterval);
-        secondsElapsed = startSec;
-        const td = document.getElementById('timer-display');
-        if (td) td.innerText = `${secondsElapsed}s`;
+        secondsElapsed = 0;
+        document.getElementById('timer-display').innerText = '0s';
         timerInterval = setInterval(() => {
             secondsElapsed++;
-            const td2 = document.getElementById('timer-display');
-            if (td2) td2.innerText = `${secondsElapsed}s`;
+            document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
         }, 1000);
-    }
-
-    function startTimer() {
-        startTimerCustom(0);
     }
 
     function triggerConfettiBurst(element) {
@@ -624,16 +624,14 @@
     function getSecurityRank(wonCount) {
         if (wonCount >= 25) return { title: "👑 Legendary Heist Master", short: "👑 Master" };
         if (wonCount >= 10) return { title: "🕵️ Master Safecracker", short: "🕵️ Safecracker" };
-        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️️ Vault Tech" };
+        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️ Vault Tech" };
         return { title: "🔓 Apprentice Locksmith", short: "🔓 Apprentice" };
     }
 
     function updateRankDisplay(wonCount) {
         let rank = getSecurityRank(wonCount);
-        const hTitle = document.getElementById('header-rank-title');
-        const mTitle = document.getElementById('modal-rank-title');
-        if (hTitle) hTitle.innerText = rank.short;
-        if (mTitle) mTitle.innerText = rank.title;
+        document.getElementById('header-rank-title').innerText = rank.short;
+        document.getElementById('modal-rank-title').innerText = rank.title;
     }
 
     function getGlobalStats() {
@@ -674,10 +672,11 @@
 
         if (mode === 'daily') {
             document.getElementById('timer-label').innerHTML = `Resets 5 AM ET: <span id="daily-timer" style="color: var(--accent-gold); font-weight: bold;">--:--:--</span>`;
+            initGame();
         } else {
             document.getElementById('timer-label').innerText = `Practice Mode`;
+            initPracticeGame(mode);
         }
-        initGameMode(mode);
     }
 
     function generateStarterBoardByDifficulty(secret, seededRand, mode) {
@@ -736,11 +735,11 @@
         return board;
     }
 
-    function initGameMode(mode) {
+    function initGame() {
         let today = getEastern5AMDayNumber();
-        activePuzzleSeed = (mode === 'daily') ? today : (mode === 'easy' ? 9999 : mode === 'standard' ? 8888 : 7777);
-
-        let secretSeed = (activePuzzleSeed * 9301 + 49297) % 233280;
+        activePuzzleSeed = today;
+        
+        let secretSeed = (today * 9301 + 49297) % 233280;
         function secretRandom() {
             secretSeed = (secretSeed * 9301 + 49297) % 233280;
             return secretSeed / 233280;
@@ -753,14 +752,14 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
-        let starterSeed = (activePuzzleSeed * 73939 + 1319) % 233280;
+        let starterSeed = (today * 73939 + 1319) % 233280;
         function starterRandom() {
             starterSeed = (starterSeed * 9301 + 49297) % 233280;
             return starterSeed / 233280;
         }
 
         lockedCells = Array(9).fill(false);
-        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, mode === 'daily' ? 'standard' : mode);
+        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, 'standard');
         cellHints = Array(9).fill(null);
         for (let i = 0; i < 9; i++) {
             if (boardState[i] === secretCombination[i]) {
@@ -776,27 +775,82 @@
 
         attemptCount = 1;
         setupActiveCell();
-        
-        const msg = document.getElementById('message');
-        if (msg) msg.innerText = '';
-        
-        const winCont = document.getElementById('win-container');
-        if (winCont) winCont.style.display = 'none';
-        
-        const ws = document.getElementById('game-workspace');
-        if (ws) ws.style.display = 'block';
-        
-        const ac = document.getElementById('attempt-counter');
-        if (ac) ac.innerText = `Attempt #1`;
-
+        document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
+        document.getElementById('win-container').style.display = 'none';
+        document.getElementById('game-workspace').style.display = 'block';
+        document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
         startTimer();
         updateRankDisplay(getGlobalStats().won);
         render();
     }
 
+    function initPracticeGame(mode) {
+        attemptCount = 1;
+        let randomSeed = Math.floor(Math.random() * 100000);
+        activePuzzleSeed = randomSeed;
+
+        let secretSeed = (randomSeed * 9301 + 49297) % 233280;
+        function secretRandom() {
+            secretSeed = (secretSeed * 9301 + 49297) % 233280;
+            return secretSeed / 233280;
+        }
+
+        let pool = [...availableNumbers];
+        secretCombination = [];
+        while (pool.length > 0) {
+            let index = Math.floor(secretRandom() * pool.length);
+            secretCombination.push(pool.splice(index, 1)[0]);
+        }
+
+        let starterSeed = (randomSeed * 73939 + 1319) % 233280;
+        function starterRandom() {
+            starterSeed = (starterSeed * 9301 + 49297) % 233280;
+            return starterSeed / 233280;
+        }
+
+        lockedCells = Array(9).fill(false);
+        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, mode);
+        cellHints = Array(9).fill(null);
+        for (let i = 0; i < 9; i++) {
+            if (boardState[i] === secretCombination[i]) {
+                lockedCells[i] = true;
+                cellHints[i] = 'green';
+            } else {
+                let correctPos = secretCombination.indexOf(boardState[i]);
+                if (isAdjacent(i, correctPos)) {
+                    cellHints[i] = 'yellow';
+                }
+            }
+        }
+
+        setupActiveCell();
+        document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
+        document.getElementById('win-container').style.display = 'none';
+        document.getElementById('game-workspace').style.display = 'block';
+        document.getElementById('attempt-counter').innerText = `Attempt #1`;
+        startTimer();
+        render();
+    }
+
+    function setupActiveCell() {
+        activeCellIndex = 0;
+        for (let i = 0; i < 9; i++) {
+            if (!lockedCells[i]) {
+                activeCellIndex = i;
+                break;
+            }
+        }
+    }
+
     function resetVault() {
         soundClick();
-        initGameMode(activeMode);
+        if (activeMode === 'daily') {
+            initGame();
+        } else {
+            initPracticeGame(activeMode);
+        }
     }
 
     function selectCell(index) {
@@ -843,11 +897,8 @@
     function evaluateBoard() {
         if (boardState.some(val => val === null)) {
             soundFail();
-            const msg = document.getElementById('message');
-            if (msg) {
-                msg.style.color = '#f87171';
-                msg.innerText = 'All tumblers must have numbers before testing!';
-            }
+            document.getElementById('message').style.color = '#f87171';
+            document.getElementById('message').innerText = 'All tumblers must have numbers before testing!';
             return;
         }
 
@@ -877,6 +928,8 @@
         if (allCorrect || lockedCells.every(val => val)) {
             if (timerInterval) clearInterval(timerInterval);
             soundVaultOpen();
+            const gridEl = document.getElementById('grid');
+            if (gridEl) gridEl.classList.add('vault-door-open');
 
             if (activeMode === 'daily') {
                 updateGlobalStats(true);
@@ -905,13 +958,9 @@
         setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
 
         attemptCount++;
-        const ac = document.getElementById('attempt-counter');
-        if (ac) ac.innerText = `Attempt #${attemptCount}`;
-        const msg = document.getElementById('message');
-        if (msg) {
-            msg.style.color = 'var(--accent-gold)';
-            msg.innerText = 'Combination tested! Correct tumblers locked in.';
-        }
+        document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
+        document.getElementById('message').style.color = 'var(--accent-gold)';
+        document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
         setupActiveCell();
         render();
     }
@@ -954,32 +1003,29 @@
     }
 
     function triggerWinDisplay(tries) {
-        const workspace = document.getElementById('game-workspace');
+        document.getElementById('game-workspace').style.display = 'none';
         const winContainer = document.getElementById('win-container');
-        if (workspace) workspace.style.display = 'none';
-        if (winContainer) winContainer.style.display = 'block';
+        winContainer.style.display = 'block';
 
         let percentile = calculatePercentile(tries);
 
-        if (winContainer) {
-            winContainer.innerHTML = `
-                <div class="result-graphic">
-                    <div class="graphic-title">🔓 Vault Cracked!</div>
-                    <div class="graphic-banner">You bypassed security in <strong>${secondsElapsed}s</strong>!</div>
-                    <div class="percentile-badge">
-                        📊 Cracked in <strong>${tries} ${tries === 1 ? 'attempt' : 'attempts'}</strong><br>
-                        🏆 Better than <strong>${percentile}%</strong> of safe crackers!
-                    </div>
-                    <div style="display:flex; gap: 8px; margin-top: 15px;">
-                        <button class="btn" onclick="shareResults(${tries})" style="background: var(--accent-green); color: #fff; flex:1;">📋 Share Score</button>
-                        <button class="btn" onclick="generateCrewChallengeLink()" style="background: var(--accent-gold); color: #0f172a; flex:1;">🔗 Heist Crew Link</button>
-                    </div>
-                    <div style="margin-top: 15px; color: var(--text-muted); font-size: 0.8em;">
-                        ⏰ ${activeMode === 'daily' ? 'Next daily vault opens at 5:00 AM ET.' : '<button class="icon-btn" onclick="switchDifficulty(\'' + activeMode + '\')" style="margin-top:5px;">Play Again</button>'}
-                    </div>
+        winContainer.innerHTML = `
+            <div class="result-graphic">
+                <div class="graphic-title">🔓 Vault Cracked!</div>
+                <div class="graphic-banner">You bypassed security in <strong>${secondsElapsed}s</strong>!</div>
+                <div class="percentile-badge">
+                    📊 Cracked in <strong>${tries} ${tries === 1 ? 'attempt' : 'attempts'}</strong><br>
+                    🏆 Better than <strong>${percentile}%</strong> of safe crackers!
                 </div>
-            `;
-        }
+                <div style="display:flex; gap: 8px; margin-top: 15px;">
+                    <button class="btn" onclick="shareResults(${tries})" style="background: var(--accent-green); color: #fff; flex:1;">📋 Share Score</button>
+                    <button class="btn" onclick="generateCrewChallengeLink()" style="background: var(--accent-gold); color: #0f172a; flex:1;">🔗 Heist Crew Link</button>
+                </div>
+                <div style="margin-top: 15px; color: var(--text-muted); font-size: 0.8em;">
+                    ⏰ ${activeMode === 'daily' ? 'Next daily vault opens at 5:00 AM ET.' : '<button class="icon-btn" onclick="switchDifficulty(\'' + activeMode + '\')" style="margin-top:5px;">Play Again</button>'}
+                </div>
+            </div>
+        `;
     }
 
     function openArchiveModal() {
@@ -999,7 +1045,7 @@
                 closeArchiveModal();
                 activeMode = 'daily';
                 activePuzzleSeed = pastDay;
-                initGameMode('daily');
+                initGame();
             };
             container.appendChild(item);
         }
@@ -1019,21 +1065,9 @@
         return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
     }
 
-    function setupActiveCell() {
-        activeCellIndex = 0;
-        for (let i = 0; i < 9; i++) {
-            if (!lockedCells[i]) {
-                activeCellIndex = i;
-                break;
-            }
-        }
-    }
-
     function render() {
-        const hudCell = document.getElementById('hud-cell');
-        if (hudCell) hudCell.innerText = `Dial #${activeCellIndex + 1}`;
+        document.getElementById('hud-cell').innerText = `Dial #${activeCellIndex + 1}`;
         const gridEl = document.getElementById('grid');
-        if (!gridEl) return;
         gridEl.innerHTML = '';
         
         boardState.forEach((val, idx) => {
@@ -1056,7 +1090,6 @@
         });
 
         const poolEl = document.getElementById('number-pool');
-        if (!poolEl) return;
         poolEl.innerHTML = '';
         availableNumbers.forEach(num => {
             const btn = document.createElement('button');
@@ -1069,7 +1102,7 @@
     }
 
     window.onload = () => {
-        initGameMode('daily');
+        initGame();
     };
 </script>
 
