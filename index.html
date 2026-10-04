@@ -200,7 +200,6 @@
         .shake {
             animation: shakeGrid 0.4s ease;
         }
-        /* Safe Door Opening Animation Effect */
         @keyframes vaultOpenPulse {
             0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); border-color: var(--accent-green); }
             70% { box-shadow: 0 0 0 25px rgba(16, 185, 129, 0); border-color: #34d399; }
@@ -511,12 +510,12 @@
     }
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_juice_v3_winfx');
+        let raw = localStorage.getItem('safe_cracker_juice_v4_fresh_reset');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try { return JSON.parse(raw); } catch(e) { return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null }; }
     }
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_juice_v3_winfx', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_juice_v4_fresh_reset', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -779,7 +778,6 @@
         }
 
         if (allCorrect || lockedCells.every(val => val)) {
-            // Trigger satisfying vault opening sound and visual pulse effect
             soundVaultOpen();
             const containerEl = document.getElementById('main-container');
             containerEl.classList.add('vault-unlocked-effect');
