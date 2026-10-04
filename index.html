@@ -535,11 +535,10 @@
 
 <script>
     const availableNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let activeMode = 'daily'; // 'daily', 'easy', 'standard', 'master'
+    let activeMode = 'daily';
 
-    // In-memory/Storage state container for each mode
     function getModeStateKey(mode) {
-        return `safe_cracker_mode_state_${mode}_v1`;
+        return `safe_cracker_mode_state_${mode}_v2`;
     }
 
     function loadModeState(mode) {
@@ -621,14 +620,18 @@
     }
     setInterval(updateDailyCountdown, 1000);
 
-    function startTimer() {
+    function startTimerCustom(startSec) {
         if (timerInterval) clearInterval(timerInterval);
-        secondsElapsed = 0;
-        document.getElementById('timer-display').innerText = '0s';
+        secondsElapsed = startSec;
+        document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
         timerInterval = setInterval(() => {
             secondsElapsed++;
             document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
         }, 1000);
+    }
+
+    function startTimer() {
+        startTimerCustom(0);
     }
 
     function triggerConfettiBurst(element) {
@@ -796,7 +799,6 @@
             return;
         }
 
-        // Generate fresh layout for this mode
         let secretSeed = (activePuzzleSeed * 9301 + 49297) % 233280;
         function secretRandom() {
             secretSeed = (secretSeed * 9301 + 49297) % 233280;
@@ -865,30 +867,6 @@
             secondsElapsed,
             todayWon
         });
-    }
-
-    function startTimerCustom(startSec) {
-        if (timerInterval) clearInterval(timerInterval);
-        secondsElapsed = startSec;
-        document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
-        timerInterval = setInterval(() => {
-            secondsElapsed++;
-            document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
-        }, 1000);
-    }
-
-    function startTimer() {
-        startTimerCustom(0);
-    }
-
-    function setupActiveCell() {
-        activeCellIndex = 0;
-        for (let i = 0; i < 9; i++) {
-            if (!lockedCells[i]) {
-                activeCellIndex = i;
-                break;
-            }
-        }
     }
 
     function resetVault() {
