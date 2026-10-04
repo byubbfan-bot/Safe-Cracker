@@ -148,8 +148,7 @@
         .grid-mask {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(9, 13, 22, 0.92);
-            backdrop-filter: blur(6px);
+            background: #090d16; /* Solid opaque cover to completely hide the board */
             border-radius: 10px;
             display: flex;
             flex-direction: column;
@@ -991,7 +990,6 @@
     }
 
     function generateShareEmojiGrid() {
-        // Pairs up attempt grids side-by-side (two per line)
         let pairs = [];
         for (let i = 0; i < attemptHistory.length; i += 2) {
             let leftBlock = attemptHistory[i].split('\n');
