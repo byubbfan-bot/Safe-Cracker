@@ -16,24 +16,6 @@
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
         }
-        /* Themed Skins */
-        body.theme-bank {
-            --bg-base: #111827;
-            --bg-panel: #1f2937;
-            --bg-card: #030712;
-            --border-color: #4b5563;
-            --accent-gold: #d97706;
-        }
-        body.theme-cyber {
-            --bg-base: #050505;
-            --bg-panel: #12081f;
-            --bg-card: #000000;
-            --border-color: #7c3aed;
-            --accent-gold: #f43f5e;
-            --accent-green: #06b6d4;
-            --accent-yellow: #ec4899;
-        }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: var(--bg-base);
@@ -217,7 +199,7 @@
             cursor: not-allowed;
         }
         .cell.locked .cell-label, .cell.locked .cell-value {
-            color: var(--accent-green);
+            color: #34d399;
         }
         .cell.yellow-hint {
             background: rgba(245, 158, 11, 0.2);
@@ -420,29 +402,31 @@
             border-radius: 8px;
             margin: 15px 0;
         }
-        .skin-picker {
+        .archive-list {
             display: flex;
+            flex-direction: column;
             gap: 8px;
-            justify-content: center;
+            max-height: 250px;
+            overflow-y: auto;
             margin: 15px 0;
         }
-        .skin-btn {
+        .archive-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             background: #090d16;
+            padding: 10px 14px;
+            border-radius: 8px;
             border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 8px 12px;
-            border-radius: 6px;
             cursor: pointer;
-            font-weight: 700;
-            font-size: 0.8em;
+            transition: 0.15s ease;
         }
-        .skin-btn.active {
+        .archive-item:hover {
             border-color: var(--accent-gold);
-            color: var(--accent-gold);
         }
     </style>
 </head>
-<body class="theme-cyber" id="body-theme">
+<body>
 
 <div class="container" id="main-container">
     <div class="top-nav">
@@ -535,14 +519,6 @@
             <div class="stat-box">
                 <div class="stat-value" id="global-fastest-time">14s</div>
                 <div class="stat-label">Fastest Time</div>
-            </div>
-        </div>
-
-        <div style="margin-top:20px;">
-            <div style="font-size:0.75em; text-transform:uppercase; font-weight:800; color:var(--text-muted); margin-bottom:6px;">Vault Skin Theme</div>
-            <div class="skin-picker">
-                <button class="skin-btn active" id="skin-cyber" onclick="setSkin('cyber')">Cyberpunk</button>
-                <button class="skin-btn" id="skin-bank" onclick="setSkin('bank')">Bank Steel</button>
             </div>
         </div>
 
@@ -640,14 +616,6 @@
             secondsElapsed++;
             document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
         }, 1000);
-    }
-
-    // --- VISUAL SKINS ---
-    function setSkin(skinName) {
-        document.body.className = skinName === 'bank' ? 'theme-bank' : 'theme-cyber';
-        document.getElementById('skin-bank').classList.toggle('active', skinName === 'bank');
-        document.getElementById('skin-cyber', skinName === 'cyber').classList.toggle('active', skinName === 'cyber');
-        localStorage.setItem('safe_cracker_skin', skinName);
     }
 
     // --- PARTICLE BURST EFFECT ---
@@ -1272,8 +1240,6 @@
     }
 
     window.onload = () => {
-        let savedSkin = localStorage.getItem('safe_cracker_skin') || 'cyber';
-        setSkin(savedSkin);
         initGame();
     };
 </script>
