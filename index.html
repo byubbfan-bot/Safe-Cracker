@@ -271,14 +271,14 @@
     </div>
 
     <div class="instructions">
-        <strong>How to crack:</strong> Arrange digits 1 through 9 into the vault grid. Click <strong>Test Combination</strong>.
+        <strong>How to crack:</strong> The vault auto-generates a pre-test combination to give you starting clues! Swap or adjust digits and click <strong>Test Combination</strong>.
         <br>• <span style="color: #34d399; font-weight: bold;">Green</span> = Tumbler clicked into correct position (locks!).
         <br>• <span style="color: #fbbf24; font-weight: bold;">Yellow</span> = Digit belongs adjacent (touching) to this tumbler.
     </div>
 
     <div class="hud">
         <div>Active Tumbler: <span id="hud-cell">Dial #1</span></div>
-        <button onclick="clearBoard()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.85em; font-weight:600; text-decoration:underline;">Reset Vault</button>
+        <button onclick="resetVault()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.85em; font-weight:600; text-decoration:underline;">Reset Vault</button>
     </div>
 
     <div id="game-workspace">
@@ -336,7 +336,7 @@
     setInterval(updateDailyCountdown, 1000);
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_daily_data');
+        let raw = localStorage.getItem('safe_cracker_starter_data');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false };
         try {
             return JSON.parse(raw);
@@ -352,10 +352,39 @@
             data.currentDay = today;
             data.triesToday = 1;
             data.todayWon = false;
-            localStorage.setItem('safe_cracker_daily_data', JSON.stringify(data));
+            localStorage.setItem('safe_cracker_starter_data', JSON.stringify(data));
         }
         attemptCount = data.triesToday;
         return data;
+    }
+
+    function generateComputerStarterBoard(secret, seededRand) {
+        // Start with a copy of the secret combination
+        let board = [...secret];
+        
+        // Pick 2 or 3 random indices to scramble so the player gets a mix of greens and yellows/wrong spots
+        let indicesToScramble = [];
+        let poolIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+        
+        // Shuffle pool indices using seeded random
+        for (let i = poolIndices.length - 1; i > 0; i--) {
+            let j = Math.floor(seededRand() * (i + 1));
+            [poolIndices[i], poolIndices[j]] = [poolIndices[j], poolIndices[i]];
+        }
+        
+        // Take 3 positions to swap around to guarantee some initial green locks and some displaced digits
+        let pos1 = poolIndices[0];
+        let pos2 = poolIndices[1];
+        let pos3 = poolIndices[2];
+        let pos4 = poolIndices[3];
+
+        let temp = board[pos1];
+        board[pos1] = board[pos2];
+        board[pos2] = board[pos3];
+        board[pos3] = board[pos4];
+        board[pos4] = temp;
+
+        return board;
     }
 
     function initGame() {
@@ -375,10 +404,38 @@
             secretCombination.push(pool.splice(index, 1)[0]);
         }
         
+        // If it's attempt #1 and user hasn't won yet, pre-fill with computer starter board and auto-evaluate initial hints!
         boardState = Array(9).fill(null);
         lockedCells = Array(9).fill(false);
         cellHints = Array(9).fill(null);
+
+        if (attemptCount === 1 && !data.todayWon) {
+            boardState = generateComputerStarterBoard(secretCombination, seededRandom);
+            
+            // Instantly calculate initial hints so player starts with pre-baked green/yellow clues
+            for (let i = 0; i < 9; i++) {
+                let userVal = boardState[i];
+                if (userVal === secretCombination[i]) {
+                    lockedCells[i] = true;
+                    cellHints[i] = 'green';
+                } else {
+                    let correctPos = secretCombination.indexOf(userVal);
+                    if (isAdjacent(i, correctPos)) {
+                        cellHints[i] = 'yellow';
+                    } else {
+                        cellHints[i] = null;
+                    }
+                }
+            }
+        }
+
         activeCellIndex = 0;
+        for (let i = 0; i < 9; i++) {
+            if (!lockedCells[i]) {
+                activeCellIndex = i;
+                break;
+            }
+        }
 
         document.getElementById('message').innerText = '';
         document.getElementById('win-container').style.display = 'none';
@@ -386,6 +443,52 @@
         
         document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
         updateDailyCountdown();
+        render();
+    }
+
+    function resetVault() {
+        // Resets the board for the current attempt
+        let dayNum = getEastern5AMDayNumber();
+        let seed = (dayNum * 9301 + 49297) % 233280;
+        function seededRandom() {
+            seed = (seed * 9301 + 49297) % 233280;
+            return seed / 233280;
+        }
+        
+        if (attemptCount === 1) {
+            boardState = generateComputerStarterBoard(secretCombination, seededRandom);
+            lockedCells = Array(9).fill(false);
+            cellHints = Array(9).fill(null);
+            for (let i = 0; i < 9; i++) {
+                let userVal = boardState[i];
+                if (userVal === secretCombination[i]) {
+                    lockedCells[i] = true;
+                    cellHints[i] = 'green';
+                } else {
+                    let correctPos = secretCombination.indexOf(userVal);
+                    if (isAdjacent(i, correctPos)) {
+                        cellHints[i] = 'yellow';
+                    } else {
+                        cellHints[i] = null;
+                    }
+                }
+            }
+        } else {
+            for (let i = 0; i < 9; i++) {
+                if (!lockedCells[i]) {
+                    boardState[i] = null;
+                    cellHints[i] = null;
+                }
+            }
+        }
+
+        for (let i = 0; i < 9; i++) {
+            if (!lockedCells[i]) {
+                activeCellIndex = i;
+                break;
+            }
+        }
+        document.getElementById('message').innerText = '';
         render();
     }
 
@@ -435,23 +538,6 @@
         render();
     }
 
-    function clearBoard() {
-        for (let i = 0; i < 9; i++) {
-            if (!lockedCells[i]) {
-                boardState[i] = null;
-                cellHints[i] = null;
-            }
-        }
-        for (let i = 0; i < 9; i++) {
-            if (!lockedCells[i]) {
-                activeCellIndex = i;
-                break;
-            }
-        }
-        document.getElementById('message').innerText = '';
-        render();
-    }
-
     function calculatePercentile(tries) {
         if (tries === 1) return 99;
         if (tries === 2) return 90;
@@ -492,12 +578,12 @@
         if (allCorrect || lockedCells.every(val => val)) {
             if (!data.todayWon) {
                 data.todayWon = true;
-                localStorage.setItem('safe_cracker_daily_data', JSON.stringify(data));
+                localStorage.setItem('safe_cracker_starter_data', JSON.stringify(data));
             }
             triggerWinDisplay(data.triesToday);
         } else {
             data.triesToday++;
-            localStorage.setItem('safe_cracker_daily_data', JSON.stringify(data));
+            localStorage.setItem('safe_cracker_starter_data', JSON.stringify(data));
             attemptCount = data.triesToday;
             document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
 
