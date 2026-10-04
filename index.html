@@ -638,7 +638,7 @@
     function getSecurityRank(wonCount) {
         if (wonCount >= 25) return { title: "👑 Legendary Heist Master", short: "👑 Master" };
         if (wonCount >= 10) return { title: "🕵️ Master Safecracker", short: "🕵️ Safecracker" };
-        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️️ Vault Tech" };
+        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡 Vault Tech" };
         return { title: "🔓 Apprentice Locksmith", short: "🔓 Apprentice" };
     }
 
@@ -1180,12 +1180,12 @@
     }
 
     function getDailyHistory() {
-        let raw = localStorage.getItem('safe_cracker_fresh_reset_v9');
+        let raw = localStorage.getItem('safe_cracker_wiped_v10');
         if (!raw) return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null };
         try { return JSON.parse(raw); } catch(e) { return { currentDay: null, triesToday: 1, todayWon: false, board: null, locked: null, hints: null }; }
     }
     function saveDailyHistory(data) {
-        localStorage.setItem('safe_cracker_fresh_reset_v9', JSON.stringify(data));
+        localStorage.setItem('safe_cracker_wiped_v10', JSON.stringify(data));
     }
 
     function getRowCol(index) {
@@ -1235,8 +1235,12 @@
     }
 
     window.onload = () => {
-        // Clear out old saved puzzle states so the daily puzzle generates cleanly
-        localStorage.removeItem('safe_cracker_modes_v1');
+        // Purge all legacy stored save states to guarantee a clean slate
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('safe_cracker_')) {
+                localStorage.removeItem(key);
+            }
+        });
         initGame();
     };
 </script>
