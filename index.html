@@ -682,8 +682,9 @@
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        let numGreens = 2;
-        let numYellows = 3;
+        // Strict parameters: min 1 green, 2 yellows; max 2 greens, 3 yellows for Daily/Standard
+        let numGreens = 1 + Math.floor(seededRand() * 2); // 1 or 2
+        let numYellows = 2 + Math.floor(seededRand() * 2); // 2 or 3
 
         if (mode === 'easy') {
             numGreens = 3;
@@ -1097,7 +1098,7 @@
         });
     }
 
-    // Auto-initialize immediately on load
+    // Auto-initialize immediately
     initGame();
 </script>
 
