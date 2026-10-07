@@ -492,3 +492,649 @@
                 <div class="stat-value" id="stat-streak">0</div>
                 <div class="stat-label">Streak</div>
             </div>
+        </div>
+
+        <button class="btn" onclick="closeStatsModal()" style="margin-top:20px;">Close</button>
+    </div>
+</div>
+
+<!-- ARCHIVE MODAL -->
+<div id="archive-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+        <h2 style="color: var(--accent-gold); margin-top:0; text-transform:uppercase;">Vault Archive</h2>
+        <p style="font-size:0.85em; color:var(--text-muted);">Play past daily puzzles in practice mode.</p>
+        <div class="archive-list" id="archive-list-container"></div>
+        <button class="btn" onclick="closeArchiveModal()" style="margin-top:15px;">Close</button>
+    </div>
+</div>
+
+<script>
+    const availableNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let secretCombination = [];
+    let boardState = Array(9).fill(null);
+    let activeCellIndex = 0;
+    let lockedCells = Array(9).fill(false);
+    let cellHints = Array(9).fill(null);
+    let attemptHistory = [];
+    let attemptCount = 1;
+    let secondsElapsed = 0;
+    let timerInterval = null;
+    let activeMode = 'daily';
+    let activePuzzleSeed = null;
+    let soundEnabled = true;
+    let gameStarted = false;
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type, duration, vol = 0.05) {
+        if (!soundEnabled) return;
+        try {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        } catch(e) {}
+    }
+    function soundClick() { playTone(600, 'triangle', 0.05, 0.04); }
+    function soundLock() { 
+        playTone(300, 'square', 0.1, 0.06); 
+        setTimeout(() => playTone(450, 'square', 0.15, 0.08), 80);
+    }
+    function soundFail() { playTone(150, 'sawtooth', 0.2, 0.08); }
+    function soundVaultOpen() {
+        playTone(180, 'sawtooth', 0.1, 0.08);
+        setTimeout(() => playTone(320, 'square', 0.12, 0.1), 100);
+        setTimeout(() => playTone(540, 'triangle', 0.15, 0.12), 220);
+        setTimeout(() => playTone(780, 'sine', 0.5, 0.15), 340);
+    }
+
+    function toggleAudio() {
+        soundEnabled = !soundEnabled;
+        const btn = document.getElementById('sound-toggle-btn');
+        btn.innerText = soundEnabled ? "🔊 Sound" : "🔇 Muted";
+        soundClick();
+    }
+
+    function openHowToModal() { document.getElementById('howto-modal').style.display = 'flex'; }
+    function closeHowToModal() { document.getElementById('howto-modal').style.display = 'none'; }
+
+    function getEastern5AMDayNumber() {
+        const now = new Date();
+        const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const easternDate = new Date(utcMs - (5 * 3600000));
+        const cycleDate = new Date(easternDate.getTime() - (5 * 3600000));
+        return Math.floor(cycleDate.getTime() / 86400000);
+    }
+
+    function updateDailyCountdown() {
+        const now = new Date();
+        const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const easternDate = new Date(utcMs - (5 * 3600000));
+        
+        let target = new Date(easternDate);
+        target.setHours(5, 0, 0, 0);
+        if (easternDate.getTime() >= target.getTime()) {
+            target.setDate(target.getDate() + 1);
+        }
+        
+        const diff = Math.max(0, target.getTime() - easternDate.getTime());
+        const hours = String(Math.floor(diff / 3600000)).padStart(2, '0');
+        const minutes = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+        const seconds = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+        
+        const timerEl = document.getElementById('daily-timer');
+        if (timerEl) timerEl.innerText = `${hours}h ${minutes}m ${seconds}s`;
+    }
+    setInterval(updateDailyCountdown, 1000);
+
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        secondsElapsed = 0;
+        document.getElementById('timer-display').innerText = '0s';
+        timerInterval = setInterval(() => {
+            secondsElapsed++;
+            document.getElementById('timer-display').innerText = `${secondsElapsed}s`;
+        }, 1000);
+    }
+
+    function triggerConfettiBurst(element) {
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        
+        for (let i = 0; i < 16; i++) {
+            const p = document.createElement('div');
+            p.className = 'confetti';
+            p.style.left = `${x}px`;
+            p.style.top = `${y}px`;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 40 + Math.random() * 80;
+            p.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+            p.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 800);
+        }
+    }
+
+    function getSecurityRank(wonCount) {
+        if (wonCount >= 25) return { title: "👑 Legendary Heist Master", short: "👑 Master" };
+        if (wonCount >= 10) return { title: "🕵️ Master Safecracker", short: "🕵️ Safecracker" };
+        if (wonCount >= 3) return { title: "🛡 Vault Tech", short: "🛡️ Vault Tech" };
+        return { title: "🔓 Apprentice Locksmith", short: "🔓 Apprentice" };
+    }
+
+    function updateRankDisplay(wonCount) {
+        let rank = getSecurityRank(wonCount);
+        document.getElementById('header-rank-title').innerText = rank.short;
+        document.getElementById('modal-rank-title').innerText = rank.title;
+    }
+
+    function getGlobalStats() {
+        let raw = localStorage.getItem('safe_cracker_stats_v3');
+        if (!raw) return { played: 0, won: 0, streak: 0 };
+        try { return JSON.parse(raw); } catch(e) { return { played: 0, won: 0, streak: 0 }; }
+    }
+    function updateGlobalStats(wonGame) {
+        if (activeMode !== 'daily') return;
+        let stats = getGlobalStats();
+        stats.played++;
+        if (wonGame) {
+            stats.won++;
+            stats.streak++;
+        } else {
+            stats.streak = 0;
+        }
+        localStorage.setItem('safe_cracker_stats_v3', JSON.stringify(stats));
+        updateRankDisplay(stats.won);
+    }
+
+    function openStatsModal() {
+        let stats = getGlobalStats();
+        document.getElementById('stat-played').innerText = stats.played;
+        document.getElementById('stat-win').innerText = stats.played > 0 ? Math.round((stats.won / stats.played) * 100) + '%' : '0%';
+        document.getElementById('stat-streak').innerText = stats.streak;
+        updateRankDisplay(stats.won);
+        document.getElementById('stats-modal').style.display = 'flex';
+    }
+    function closeStatsModal() {
+        document.getElementById('stats-modal').style.display = 'none';
+    }
+
+    function switchDifficulty(mode) {
+        activeMode = mode;
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(`tab-${mode}`).classList.add('active');
+
+        if (mode === 'daily') {
+            document.getElementById('timer-label').innerHTML = `Resets 5 AM ET: <span id="daily-timer" style="color: var(--accent-gold); font-weight: bold;">--:--:--</span>`;
+            initGame();
+        } else {
+            document.getElementById('timer-label').innerText = `Practice Mode`;
+            initPracticeGame(mode);
+        }
+    }
+
+    function generateStarterBoardByDifficulty(secret, seededRand, mode) {
+        let board = [...secret];
+        let indices = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+        
+        for (let i = indices.length - 1; i > 0; i--) {
+            let j = Math.floor(seededRand() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+
+        let numGreens = 1 + Math.floor(seededRand() * 2);
+        let numYellows = 2 + Math.floor(seededRand() * 2);
+
+        if (mode === 'easy') {
+            numGreens = 3;
+            numYellows = 4;
+        } else if (mode === 'master') {
+            numGreens = 1;
+            numYellows = 1;
+        }
+
+        let greenIndices = indices.splice(0, numGreens);
+        let yellowIndices = indices.splice(0, numYellows);
+
+        for (let gIdx of greenIndices) {
+            board[gIdx] = secret[gIdx];
+        }
+
+        for (let yIdx of yellowIndices) {
+            let neighbors = [];
+            for (let i = 0; i < 9; i++) {
+                if (isAdjacent(i, yIdx) && i !== yIdx && !greenIndices.includes(i)) {
+                    neighbors.push(i);
+                }
+            }
+            if (neighbors.length > 0) {
+                let n = neighbors[Math.floor(seededRand() * neighbors.length)];
+                let temp = board[n];
+                board[n] = board[yIdx];
+                board[yIdx] = temp;
+            }
+        }
+
+        for (let rIdx of indices) {
+            if (board[rIdx] === secret[rIdx]) {
+                let validTarget = indices.find(o => o !== rIdx && board[o] !== secret[o]);
+                if (validTarget !== undefined) {
+                    let temp = board[rIdx];
+                    board[rIdx] = board[validTarget];
+                    board[validTarget] = temp;
+                }
+            }
+        }
+
+        return board;
+    }
+
+    function initGame() {
+        let today = getEastern5AMDayNumber();
+        activePuzzleSeed = today;
+        attemptHistory = [];
+        gameStarted = false;
+        document.getElementById('start-mask').style.display = 'flex';
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById('timer-display').innerText = '0s';
+        
+        let secretSeed = (today * 9301 + 49297) % 233280;
+        function secretRandom() {
+            secretSeed = (secretSeed * 9301 + 49297) % 233280;
+            return secretSeed / 233280;
+        }
+
+        let pool = [...availableNumbers];
+        secretCombination = [];
+        while (pool.length > 0) {
+            let index = Math.floor(secretRandom() * pool.length);
+            secretCombination.push(pool.splice(index, 1)[0]);
+        }
+        
+        let starterSeed = (today * 73939 + 1319) % 233280;
+        function starterRandom() {
+            starterSeed = (starterSeed * 9301 + 49297) % 233280;
+            return starterSeed / 233280;
+        }
+
+        lockedCells = Array(9).fill(false);
+        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, 'daily');
+        cellHints = Array(9).fill(null);
+        for (let i = 0; i < 9; i++) {
+            if (boardState[i] === secretCombination[i]) {
+                lockedCells[i] = true;
+                cellHints[i] = 'green';
+            } else {
+                let correctPos = secretCombination.indexOf(boardState[i]);
+                if (isAdjacent(i, correctPos)) {
+                    cellHints[i] = 'yellow';
+                }
+            }
+        }
+
+        attemptCount = 1;
+        setupActiveCell();
+        document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
+        document.getElementById('win-container').style.display = 'none';
+        document.getElementById('game-workspace').style.display = 'block';
+        document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
+        updateRankDisplay(getGlobalStats().won);
+        render();
+    }
+
+    function initPracticeGame(mode) {
+        attemptCount = 1;
+        attemptHistory = [];
+        gameStarted = false;
+        document.getElementById('start-mask').style.display = 'flex';
+        if (timerInterval) clearInterval(timerInterval);
+        document.getElementById('timer-display').innerText = '0s';
+
+        let randomSeed = Math.floor(Math.random() * 100000);
+        activePuzzleSeed = randomSeed;
+
+        let secretSeed = (randomSeed * 9301 + 49297) % 233280;
+        function secretRandom() {
+            secretSeed = (secretSeed * 9301 + 49297) % 233280;
+            return secretSeed / 233280;
+        }
+
+        let pool = [...availableNumbers];
+        secretCombination = [];
+        while (pool.length > 0) {
+            let index = Math.floor(secretRandom() * pool.length);
+            secretCombination.push(pool.splice(index, 1)[0]);
+        }
+
+        let starterSeed = (randomSeed * 73939 + 1319) % 233280;
+        function starterRandom() {
+            starterSeed = (starterSeed * 9301 + 49297) % 233280;
+            return starterSeed / 233280;
+        }
+
+        lockedCells = Array(9).fill(false);
+        boardState = generateStarterBoardByDifficulty(secretCombination, starterRandom, mode);
+        cellHints = Array(9).fill(null);
+        for (let i = 0; i < 9; i++) {
+            if (boardState[i] === secretCombination[i]) {
+                lockedCells[i] = true;
+                cellHints[i] = 'green';
+            } else {
+                let correctPos = secretCombination.indexOf(boardState[i]);
+                if (isAdjacent(i, correctPos)) {
+                    cellHints[i] = 'yellow';
+                }
+            }
+        }
+
+        setupActiveCell();
+        document.getElementById('message').innerText = '';
+        document.getElementById('grid').classList.remove('vault-door-open');
+        document.getElementById('win-container').style.display = 'none';
+        document.getElementById('game-workspace').style.display = 'block';
+        document.getElementById('attempt-counter').innerText = `Attempt #1`;
+        render();
+    }
+
+    function startVaultGame() {
+        soundClick();
+        gameStarted = true;
+        document.getElementById('start-mask').style.display = 'none';
+        startTimer();
+    }
+
+    function setupActiveCell() {
+        activeCellIndex = 0;
+        for (let i = 0; i < 9; i++) {
+            if (!lockedCells[i]) {
+                activeCellIndex = i;
+                break;
+            }
+        }
+    }
+
+    function selectCell(index) {
+        if (!gameStarted || lockedCells[index]) return;
+        soundClick();
+        activeCellIndex = index;
+        render();
+    }
+
+    function placeNumber(num) {
+        if (!gameStarted || lockedCells[activeCellIndex]) return;
+        soundClick();
+
+        let existingIndex = boardState.indexOf(num);
+        if (existingIndex !== -1 && existingIndex !== activeCellIndex) {
+            if (lockedCells[existingIndex]) return;
+            let temp = boardState[activeCellIndex];
+            boardState[activeCellIndex] = num;
+            boardState[existingIndex] = temp;
+            cellHints[activeCellIndex] = null;
+            cellHints[existingIndex] = null;
+        } else {
+            boardState[activeCellIndex] = num;
+            cellHints[activeCellIndex] = null;
+            for (let i = 1; i <= 9; i++) {
+                let nextIdx = (activeCellIndex + i) % 9;
+                if (!lockedCells[nextIdx]) {
+                    activeCellIndex = nextIdx;
+                    break;
+                }
+            }
+        }
+        render();
+    }
+
+    function calculatePercentile(tries) {
+        if (tries === 1) return 99;
+        if (tries === 2) return 90;
+        if (tries === 3) return 75;
+        if (tries === 4) return 60;
+        return Math.max(15, 80 - (tries * 10));
+    }
+
+    function recordCurrentAttemptState() {
+        let gridLines = [];
+        for (let r = 0; r < 3; r++) {
+            let rowStr = "";
+            for (let c = 0; c < 3; c++) {
+                let idx = r * 3 + c;
+                if (lockedCells[idx] || boardState[idx] === secretCombination[idx]) rowStr += "🟩";
+                else if (cellHints[idx] === 'yellow') rowStr += "🟨";
+                else rowStr += "⬛";
+            }
+            gridLines.push(rowStr);
+        }
+        attemptHistory.push(gridLines.join('\n'));
+    }
+
+    function evaluateBoard() {
+        if (!gameStarted) return;
+        if (boardState.some(val => val === null)) {
+            soundFail();
+            document.getElementById('message').style.color = '#f87171';
+            document.getElementById('message').innerText = 'All tumblers must have numbers before testing!';
+            return;
+        }
+
+        let allCorrect = true;
+        let newlyLocked = false;
+
+        for (let i = 0; i < 9; i++) {
+            if (lockedCells[i]) continue;
+            let userVal = boardState[i];
+            if (userVal === secretCombination[i]) {
+                lockedCells[i] = true;
+                cellHints[i] = 'green';
+                newlyLocked = true;
+                const cellEl = document.querySelectorAll('.cell')[i];
+                if (cellEl) triggerConfettiBurst(cellEl);
+            } else {
+                allCorrect = false;
+                let correctPos = secretCombination.indexOf(userVal);
+                if (isAdjacent(i, correctPos)) {
+                    cellHints[i] = 'yellow';
+                } else {
+                    cellHints[i] = null;
+                }
+            }
+        }
+
+        recordCurrentAttemptState();
+
+        if (allCorrect || lockedCells.every(val => val)) {
+            if (timerInterval) clearInterval(timerInterval);
+            soundVaultOpen();
+            const gridEl = document.getElementById('grid');
+            if (gridEl) gridEl.classList.add('vault-door-open');
+
+            if (activeMode === 'daily') {
+                updateGlobalStats(true);
+            }
+            
+            setTimeout(() => {
+                triggerWinDisplay(attemptCount);
+            }, 650);
+            render();
+            return;
+        }
+
+        if (newlyLocked) {
+            soundLock();
+        } else {
+            soundFail();
+            const gridEl = document.getElementById('grid');
+            if (gridEl) {
+                gridEl.classList.add('shake');
+                setTimeout(() => gridEl.classList.remove('shake'), 400);
+            }
+        }
+
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(c => c.classList.add('flip'));
+        setTimeout(() => cells.forEach(c => c.classList.remove('flip')), 400);
+
+        attemptCount++;
+        document.getElementById('attempt-counter').innerText = `Attempt #${attemptCount}`;
+        document.getElementById('message').style.color = 'var(--accent-gold)';
+        document.getElementById('message').innerText = 'Combination tested! Correct tumblers locked in.';
+        setupActiveCell();
+        render();
+    }
+
+    function generateShareEmojiGrid() {
+        let pairs = [];
+        for (let i = 0; i < attemptHistory.length; i += 2) {
+            let leftBlock = attemptHistory[i].split('\n');
+            let rightBlock = (i + 1 < attemptHistory.length) ? attemptHistory[i + 1].split('\n') : ["   ", "   ", "   "];
+            
+            let combinedLine1 = leftBlock[0] + "    " + rightBlock[0];
+            let combinedLine2 = leftBlock[1] + "    " + rightBlock[1];
+            let combinedLine3 = leftBlock[2] + "    " + rightBlock[2];
+            
+            pairs.push(combinedLine1 + '\n' + combinedLine2 + '\n' + combinedLine3);
+        }
+        return pairs.join('\n\n');
+    }
+
+    function shareResults(tries) {
+        let percentile = calculatePercentile(tries);
+        let emojiGrid = generateShareEmojiGrid();
+        let shareText = `🔐 Safe Cracker (${activeMode.toUpperCase()}) - ${tries} ${tries === 1 ? 'Attempt' : 'Attempts'} (${secondsElapsed}s)\nBeat ${percentile}% of players!\n\n${emojiGrid}\n\nPlay here: ${window.location.origin + window.location.pathname}`;
+
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(shareText).then(() => {
+                alert('Results copied to clipboard!');
+            });
+        } else {
+            prompt('Copy your results:', shareText);
+        }
+    }
+
+    function generateCrewChallengeLink() {
+        let randomSeed = Math.floor(Math.random() * 90000) + 10000;
+        let challengeUrl = `${window.location.origin + window.location.pathname}?challenge=${randomSeed}`;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(challengeUrl).then(() => {
+                alert('Heist Crew challenge link copied! Send this to friends to race head-to-head.');
+            });
+        } else {
+            prompt('Copy challenge link:', challengeUrl);
+        }
+    }
+
+    function triggerWinDisplay(tries) {
+        document.getElementById('game-workspace').style.display = 'none';
+        const winContainer = document.getElementById('win-container');
+        winContainer.style.display = 'block';
+
+        let percentile = calculatePercentile(tries);
+
+        winContainer.innerHTML = `
+            <div class="result-graphic">
+                <div class="graphic-title">🔓 Vault Cracked!</div>
+                <div class="graphic-banner">You bypassed security in <strong>${secondsElapsed}s</strong>!</div>
+                <div class="percentile-badge">
+                    📊 Cracked in <strong>${tries} ${tries === 1 ? 'attempt' : 'attempts'}</strong><br>
+                    🏆 Better than <strong>${percentile}%</strong> of safe crackers!
+                </div>
+                <div style="display:flex; gap: 8px; margin-top: 15px;">
+                    <button class="btn" onclick="shareResults(${tries})" style="background: var(--accent-green); color: #fff; flex:1;">📋 Share Score</button>
+                    <button class="btn" onclick="generateCrewChallengeLink()" style="background: var(--accent-gold); color: #0f172a; flex:1;">🔗 Heist Crew Link</button>
+                </div>
+                <div style="margin-top: 15px; color: var(--text-muted); font-size: 0.8em;">
+                    ⏰ ${activeMode === 'daily' ? 'Next daily vault opens at 5:00 AM ET.' : '<button class="icon-btn" onclick="switchDifficulty(\'' + activeMode + '\')" style="margin-top:5px;">Play Again</button>'}
+                </div>
+            </div>
+        `;
+    }
+
+    function openArchiveModal() {
+        const container = document.getElementById('archive-list-container');
+        container.innerHTML = '';
+        let currentDay = getEastern5AMDayNumber();
+
+        for (let i = 1; i <= 7; i++) {
+            let pastDay = currentDay - i;
+            let dateObj = new Date((pastDay * 86400000) + (5 * 3600000));
+            let dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            let item = document.createElement('div');
+            item.className = 'archive-item';
+            item.innerHTML = `<span>Vault #${pastDay} (${dateStr})</span> <span style="color:var(--accent-gold); font-weight:700;">Play ➔</span>`;
+            item.onclick = () => {
+                closeArchiveModal();
+                activeMode = 'daily';
+                activePuzzleSeed = pastDay;
+                initGame();
+            };
+            container.appendChild(item);
+        }
+        document.getElementById('archive-modal').style.display = 'flex';
+    }
+    function closeArchiveModal() {
+        document.getElementById('archive-modal').style.display = 'none';
+    }
+
+    function getRowCol(index) {
+        return { r: Math.floor(index / 3), c: index % 3 };
+    }
+
+    function isAdjacent(idx1, idx2) {
+        let pos1 = getRowCol(idx1);
+        let pos2 = getRowCol(idx2);
+        return (Math.abs(pos1.r - pos2.r) + Math.abs(pos1.c - pos2.c) === 1);
+    }
+
+    function render() {
+        const gridEl = document.getElementById('grid');
+        gridEl.innerHTML = '';
+        
+        boardState.forEach((val, idx) => {
+            const cell = document.createElement('div');
+            let cls = 'cell';
+            if (idx === activeCellIndex && gameStarted) cls += ' selected';
+            if (lockedCells[idx]) {
+                cls += ' locked';
+            } else if (cellHints[idx] === 'yellow') {
+                cls += ' yellow-hint';
+            }
+            cell.className = cls;
+            cell.onclick = () => selectCell(idx);
+            cell.ontouchend = (e) => { e.preventDefault(); selectCell(idx); };
+
+            cell.innerHTML = `
+                <span class="cell-label">Dial #${idx + 1}</span>
+                <span class="cell-value">${val !== null ? val : ''}</span>
+            `;
+            gridEl.appendChild(cell);
+        });
+
+        const poolEl = document.getElementById('number-pool');
+        poolEl.innerHTML = '';
+        availableNumbers.forEach(num => {
+            const btn = document.createElement('button');
+            btn.className = 'pool-btn';
+            btn.disabled = false;
+            btn.innerText = num;
+            btn.onclick = () => placeNumber(num);
+            btn.ontouchend = (e) => { e.preventDefault(); placeNumber(num); };
+            poolEl.appendChild(btn);
+        });
+    }
+
+    // Auto-initialize immediately
+    initGame();
+</script>
+
+</body>
+</html>
